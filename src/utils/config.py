@@ -35,6 +35,9 @@ class Config:
     verbose: bool = True
     log_dir: str = "logs"
     
+    # DeepStack settings
+    use_lookahead: bool = True  # Enable DeepStack lookahead by default
+    
     @classmethod
     def from_env(cls) -> 'Config':
         """Create config from environment variables."""
@@ -49,7 +52,8 @@ class Config:
             model_dir=os.getenv('MODEL_DIR', 'models'),
             model_path=os.getenv('MODEL_PATH'),
             verbose=os.getenv('VERBOSE', 'true').lower() == 'true',
-            log_dir=os.getenv('LOG_DIR', 'logs')
+            log_dir=os.getenv('LOG_DIR', 'logs'),
+            use_lookahead=os.getenv('USE_LOOKAHEAD', 'true').lower() == 'true'
         )
     
     def to_dict(self) -> dict:
@@ -69,7 +73,8 @@ class Config:
             'model_dir': self.model_dir,
             'model_path': self.model_path,
             'verbose': self.verbose,
-            'log_dir': self.log_dir
+            'log_dir': self.log_dir,
+            'use_lookahead': self.use_lookahead
         }
 
 

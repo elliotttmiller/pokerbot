@@ -1,32 +1,35 @@
 # Core dependencies
-numpy>=1.26.0
-pillow>=10.0.0
+numpy
+pillow
 
 # Machine Learning
-tensorflow>=2.16.0
-keras>=3.0.0
+tensorflow
+keras
+torch
 
 # Vision and OCR
-openai>=1.12.0
-easyocr>=1.7.0
+openai
+easyocr
 
 # Screen automation
-pyautogui>=0.9.54
-pygetwindow>=0.0.9
-pymsgbox>=1.0.9
-pyperclip>=1.8.2
-pyscreeze>=0.1.30
-pytweening>=1.1.0
-
-# macOS specific (for screencapture)
-pyobjc-core>=10.0; sys_platform == 'darwin'
-pyobjc-framework-Cocoa>=10.0; sys_platform == 'darwin'
-pyobjc-framework-Quartz>=10.0; sys_platform == 'darwin'
+pyautogui
+pygetwindow
+pymsgbox
+pyperclip
+pyscreeze
+pytweening
 
 # Utilities
-python-dotenv>=1.0.0
-tqdm>=4.66.0
+python-dotenv
+tqdm
 
 # HTTP
-httpx>=0.26.0
-certifi>=2024.0.0
+httpx
+certifi
+
+# Data analysis/visualization
+pandas
+matplotlib
+
+# Testing
+pytest

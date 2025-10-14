@@ -16,11 +16,17 @@ from typing import Dict, List, Optional, Tuple
 
 import numpy as np
 import os
+import tensorflow as tf
+import torch
+import torch.nn as nn
 
 from ..game import Action, Card, HandEvaluator
 from ..utils.model_loader import ModelLoader, TrainingDataManager
 from .base_agent import BaseAgent
 from .cfr_agent import CFRAgent, InfoSet
+from .deepstack_lookahead import DeepStackLookahead
+from src.game.bucketer import Bucketer
+from src.game.strategy_filling import StrategyFilling
 
 
 class ChampionAgent(BaseAgent):
@@ -52,7 +58,8 @@ class ChampionAgent(BaseAgent):
                  dqn_weight: float = 0.4,
                  equity_weight: float = 0.2,
                  use_cfr_plus: bool = True,  # Default to True
-                 use_deepstack: bool = True):  # Default to True
+                 use_deepstack: bool = True,  # Default to True
+                 use_lookahead: bool = True):  # Default to True
         """
         Initialize Champion Agent with optional enhancements.
         
@@ -72,6 +79,7 @@ class ChampionAgent(BaseAgent):
             equity_weight: Weight for equity-based decisions (0-1)
             use_cfr_plus: Enable CFR+ enhancements (from poker-ai)
             use_deepstack: Enable DeepStack value network (from poker-ai)
+            use_lookahead: Enable DeepStack lookahead (from poker-ai)
         """
         super().__init__(name)
         
@@ -111,6 +119,12 @@ class ChampionAgent(BaseAgent):
         if use_deepstack:
             self._init_deepstack_network()
         
+        # Lookahead configuration
+        self.use_lookahead = use_lookahead
+        self.lookahead = None
+        if self.use_lookahead:
+            self.lookahead = DeepStackLookahead()
+        
         # Ensemble weights
         self.cfr_weight = cfr_weight
         self.dqn_weight = dqn_weight
@@ -120,17 +134,15 @@ class ChampionAgent(BaseAgent):
         # Training mode
         self.training_mode = True
         
-        # Lookahead configuration
-        self.lookahead_enabled = True  # Default to True
-        self.lookahead_depth = 3  # Default lookahead depth
-        
-        print(f"🏆 {name} initialized with champion pre-trained knowledge!")
+        print(f"[INFO] {name} initialized with champion pre-trained knowledge!")
         print(f"   Strategy weights: CFR={self.cfr_weight:.2f}, "
               f"DQN={self.dqn_weight:.2f}, Equity={self.equity_weight:.2f}")
         if use_cfr_plus:
             print(f"   ✓ CFR+ enhancements enabled")
         if use_deepstack:
             print(f"   ✓ DeepStack value network enabled")
+        if use_lookahead:
+            print(f"   ✓ DeepStack lookahead enabled")
     
     def _normalize_weights(self):
         """Normalize ensemble weights to sum to 1.0."""
@@ -143,7 +155,6 @@ class ChampionAgent(BaseAgent):
     def _build_model(self):
         """Build the DQN neural network model."""
         try:
-            import tensorflow as tf
             Sequential = tf.keras.models.Sequential
             Dense = tf.keras.layers.Dense
             Input = tf.keras.layers.Input
@@ -176,17 +187,17 @@ class ChampionAgent(BaseAgent):
                 deepstack_info = self.model_loader.load_deepstack_model(use_gpu=False)
                 print(f"   ✓ Loaded DeepStack model ({deepstack_info['size_mb']:.1f} MB)")
             except FileNotFoundError:
-                print("   ⚠ DeepStack models not found (continuing without)")
+                print("   [WARN] DeepStack models not found (continuing without)")
             
             # Load preflop equity tables
             try:
                 equity_data = self.data_manager.load_preflop_equity()
                 print(f"   ✓ Loaded preflop equity table ({len(equity_data)} hands)")
             except FileNotFoundError:
-                print("   ⚠ Equity tables not found (continuing without)")
+                print("   [WARN] Equity tables not found (continuing without)")
                 
         except Exception as e:
-            print(f"   ⚠ Error loading pre-trained models: {e}")
+            print(f"   [WARN] Error loading pre-trained models: {e}")
             self.model_loader = None
             self.data_manager = None
     
@@ -198,7 +209,7 @@ class ChampionAgent(BaseAgent):
                      player_stack: int,
                      opponent_bet: int) -> np.ndarray:
         """
-        Encode game state as a feature vector for DQN.
+        Encode game state as a feature vector for DQN, using hand abstraction buckets.
         
         Args:
             hole_cards: Player's hole cards
@@ -211,21 +222,15 @@ class ChampionAgent(BaseAgent):
         Returns:
             NumPy array representing state
         """
+        bucketer = Bucketer()
+        # Abstract hole cards and community cards into buckets
+        hole_bucket = bucketer.bucket_hand(hole_cards, community_cards)
         state = np.zeros(self.state_size)
-        
-        # Encode hole cards (2 cards * 2 features = 4)
-        for i, card in enumerate(hole_cards[:2]):
-            state[i * 2] = card.rank / 12.0
-            state[i * 2 + 1] = card.suit / 3.0
-        
-        # Encode community cards (5 cards * 2 features = 10)
-        for i, card in enumerate(community_cards[:5]):
-            idx = 4 + i * 2
-            state[idx] = card.rank / 12.0
-            state[idx + 1] = card.suit / 3.0
+        # Use bucket index as part of state encoding
+        state[0] = hole_bucket / bucketer.num_buckets
         
         # Encode game state
-        idx = 14
+        idx = 1
         state[idx] = min(pot / 1000.0, 1.0)
         state[idx + 1] = min(current_bet / 500.0, 1.0)
         state[idx + 2] = min(player_stack / 1000.0, 1.0)
@@ -417,6 +422,32 @@ class ChampionAgent(BaseAgent):
         else:
             votes['equity'] = None
         
+        # 4. DeepStack Lookahead vote
+        if self.use_lookahead and self.lookahead:
+            try:
+                # Example: build and resolve lookahead for current state
+                self.lookahead.build_lookahead(0, 1, community_cards)
+                player_range = np.ones(self.action_size) / self.action_size
+                opponent_range = np.ones(self.action_size) / self.action_size
+                self.lookahead.resolve_first_node(player_range, opponent_range)
+                results = self.lookahead.get_results()
+                # Use strategy from lookahead as a vote
+                strategy = results.get('strategy', np.ones((self.action_size, self.action_size)))
+                action_idx = np.argmax(np.sum(strategy, axis=1))
+                if action_idx == 0:
+                    lookahead_action, lookahead_raise = Action.FOLD, 0
+                elif action_idx == 1:
+                    lookahead_action, lookahead_raise = Action.CALL, 0
+                else:
+                    lookahead_raise = max(int(pot * 0.5), 20)
+                    lookahead_raise = min(lookahead_raise, player_stack)
+                    lookahead_action, lookahead_raise = Action.RAISE, lookahead_raise
+                votes['lookahead'] = (lookahead_action, lookahead_raise, 0.2)  # Assign weight as needed
+            except Exception:
+                votes['lookahead'] = None
+        else:
+            votes['lookahead'] = None
+        
         # Ensemble decision making
         return self._ensemble_decision(votes, current_bet, pot, player_stack)
     
@@ -526,13 +557,12 @@ class ChampionAgent(BaseAgent):
     
     def train_cfr(self, num_iterations: int = 1000):
         """
-        Train CFR component through self-play.
-        
-        Args:
-            num_iterations: Number of CFR training iterations
+        Train CFR component through self-play and normalize strategy using strategy_filling.
         """
         print(f"Training CFR component for {num_iterations} iterations...")
         self.cfr.train(num_iterations)
+        # Normalize strategy after training
+        self.cfr.strategy = StrategyFilling().fill_missing(self.cfr.strategy)
         print(f"✓ CFR training complete ({self.cfr.iterations} total iterations)")
     
     def save_strategy(self, filepath_prefix: str):
@@ -552,7 +582,7 @@ class ChampionAgent(BaseAgent):
                 self.model.save(f"{filepath_prefix}.keras")
                 print(f"✓ DQN model saved to {filepath_prefix}.keras")
             except Exception as e:
-                print(f"⚠ DQN model save failed: {e}")
+                print(f"[WARN] DQN model save failed: {e}")
     
     def load_strategy(self, filepath_prefix: str):
         """
@@ -566,7 +596,7 @@ class ChampionAgent(BaseAgent):
             self.cfr.load_strategy(f"{filepath_prefix}.cfr")
             print(f"✓ CFR strategy loaded from {filepath_prefix}.cfr")
         except FileNotFoundError:
-            print(f"⚠ CFR strategy file not found: {filepath_prefix}.cfr")
+            print(f"[WARN] CFR strategy file not found: {filepath_prefix}.cfr")
         
         # Load DQN model
         if self.model:
@@ -581,7 +611,7 @@ class ChampionAgent(BaseAgent):
                     self.model.load_weights(f"{filepath_prefix}.h5")
                     print(f"✓ DQN model loaded from {filepath_prefix}.h5")
                 except Exception:
-                    print(f"⚠ DQN model file not found: {filepath_prefix}.keras or .h5")
+                    print(f"[WARN] DQN model file not found: {filepath_prefix}.keras or .h5")
     
     def set_training_mode(self, training: bool):
         """
@@ -615,9 +645,6 @@ class ChampionAgent(BaseAgent):
     def _init_deepstack_network(self):
         """Initialize DeepStack value network if PyTorch is available."""
         try:
-            import torch
-            import torch.nn as nn
-            
             # Simple DeepStack-style value network
             class SimpleValueNetwork(nn.Module):
                 def __init__(self, bucket_count=169):
@@ -646,20 +673,17 @@ class ChampionAgent(BaseAgent):
             self.value_network = SimpleValueNetwork()
             print(f"   ✓ DeepStack value network initialized")
         except ImportError:
-            print(f"   ⚠ PyTorch not available, DeepStack disabled")
+            print(f"   [WARN] PyTorch not available, DeepStack disabled")
             self.use_deepstack = False
             self.value_network = None
         except Exception as e:
-            print(f"   ⚠ DeepStack initialization failed: {e}")
+            print(f"   [WARN] DeepStack initialization failed: {e}")
             self.use_deepstack = False
             self.value_network = None
     
     def train_cfr_plus(self, num_iterations: int = 1000):
         """
-        Train CFR component with CFR+ enhancements.
-        
-        Args:
-            num_iterations: Number of CFR+ iterations
+        Train CFR component with CFR+ enhancements and normalize strategy using strategy_filling.
         """
         if self.use_cfr_plus:
             self.cfr.train_with_cfr_plus(num_iterations)
@@ -668,6 +692,8 @@ class ChampionAgent(BaseAgent):
             self.cfr.enable_cfr_plus()
             self.use_cfr_plus = True
             self.cfr.train_with_cfr_plus(num_iterations)
+        # Normalize strategy after training
+        self.cfr.strategy = StrategyFilling().fill_missing(self.cfr.strategy)
     
     def estimate_hand_values(
         self,
@@ -694,8 +720,6 @@ class ChampionAgent(BaseAgent):
             )
         
         try:
-            import torch
-            
             # Convert to torch tensors
             my_range_tensor = torch.tensor(my_range, dtype=torch.float32)
             opp_range_tensor = torch.tensor(opponent_range, dtype=torch.float32)
@@ -752,7 +776,6 @@ class ChampionAgent(BaseAgent):
         # Add DeepStack stats
         if self.value_network is not None:
             try:
-                import torch
                 stats['deepstack'] = {
                     'parameters': sum(p.numel() for p in self.value_network.parameters()),
                     'bucket_count': self.value_network.bucket_count
@@ -760,20 +783,33 @@ class ChampionAgent(BaseAgent):
             except:
                 pass
         
+        # Add Lookahead stats
+        if self.lookahead is not None:
+            stats['lookahead'] = {
+                'enabled': self.use_lookahead,
+                'last_results': self.lookahead.get_results()
+            }
+        
         return stats
     
-    def continual_resolving(self, game_state, enabled=True):
+    def continual_resolving(self, game_state, enabled=None):
         """
         High-impact continual re-solving logic (DeepStack-inspired).
         If enabled, re-solves the game tree at each decision point for optimal play.
         Lightweight, only triggers if config flag is set.
         """
-        if not enabled:
+        if enabled is None:
+            enabled = self.use_lookahead
+        if not enabled or not self.lookahead:
             return None
-        # Minimal placeholder: In production, this would call a lookahead/tree solver
-        # For now, just log and return None to avoid breaking workflow
-        print("[DeepStack] Continual re-solving triggered (no-op placeholder)")
-        return None
+        # Example: build and resolve lookahead for continual re-solving
+        self.lookahead.build_lookahead(0, 1, game_state.community_cards)
+        player_range = np.ones(self.action_size) / self.action_size
+        opponent_range = np.ones(self.action_size) / self.action_size
+        self.lookahead.resolve_first_node(player_range, opponent_range)
+        results = self.lookahead.get_results()
+        print("[DeepStack] Continual re-solving results:", results)
+        return results
 
     def set_lookahead_enabled(self, enabled: bool):
         """
@@ -787,6 +823,16 @@ class ChampionAgent(BaseAgent):
         High-impact terminal equity calculation using DeepStack-inspired logic.
         Returns estimated equity for the current game state.
         """
+        if self.use_lookahead and self.lookahead:
+            # Example: use lookahead for terminal equity estimation
+            self.lookahead.build_lookahead(0, 1, game_state.community_cards)
+            player_range = np.ones(self.action_size) / self.action_size
+            opponent_range = np.ones(self.action_size) / self.action_size
+            self.lookahead.resolve_first_node(player_range, opponent_range)
+            results = self.lookahead.get_results()
+            equity = np.mean(results.get('achieved_cfvs', np.zeros(self.action_size)))
+            print(f"[DeepStack] Terminal equity (lookahead): {equity:.3f}")
+            return equity
         # Minimal placeholder: In production, this would use DeepStack's terminal_equity module
         # For now, use MonteCarloSimulator for robust, non-breaking equity estimation
         try:
@@ -826,34 +872,60 @@ def load_deepstack_train_samples(samples_dir='data/train_samples'):
 def train_value_network_on_deepstack_samples(value_network, samples, epochs=10, batch_size=64):
     """
     Train DeepStack value network using masked Huber loss and championship samples.
+    Uses Keras-compatible loss with mask concatenated to targets.
     """
     import tensorflow as tf
     train_inputs, train_targets, train_mask = samples['train']
     valid_inputs, valid_targets, valid_mask = samples['valid']
-    # Compile with masked Huber loss
+    # Concatenate mask to targets for Keras loss
+    train_y = np.concatenate([train_targets, train_mask], axis=1)
+    valid_y = np.concatenate([valid_targets, valid_mask], axis=1)
     value_network.compile(
-        loss=lambda y_true, y_pred: masked_huber_loss(y_true, y_pred, train_mask),
+        loss=masked_huber_loss_with_mask,
         optimizer=tf.keras.optimizers.Adam(learning_rate=0.001)
     )
     history = value_network.fit(
-        train_inputs, train_targets,
-        validation_data=(valid_inputs, valid_targets),
+        train_inputs, train_y,
+        validation_data=(valid_inputs, valid_y),
         epochs=epochs, batch_size=batch_size, verbose=2
     )
     return history
 
-def masked_huber_loss(y_true, y_pred, mask, delta=1.0):
+def masked_huber_loss_with_mask(y_true, y_pred):
     """
     Masked Huber loss for DeepStack value network training.
-    Only computes loss for entries where mask == 1.
+    Uses imported masked_huber_loss for consistency.
     """
-    import tensorflow as tf
-    error = y_true - y_pred
-    abs_error = tf.abs(error)
-    quadratic = tf.minimum(abs_error, delta)
-    linear = abs_error - quadratic
-    loss = 0.5 * tf.square(quadratic) + delta * linear
-    # Apply mask
-    loss = loss * mask
-    # Average only over masked entries
-    return tf.reduce_sum(loss) / tf.reduce_sum(mask)
+    from src.game.masked_huber_loss import masked_huber_loss
+    return masked_huber_loss(y_true, y_pred)
+
+def generate_deepstack_training_data(train_data_count, valid_data_count, output_dir):
+    """
+    Adapter for DeepStack data generation (placeholder).
+    Generates training/validation files with random poker situations and counterfactual values.
+    Output files: train.inputs, train.targets, train.mask, valid.inputs, valid.targets, valid.mask
+    """
+    import numpy as np
+    import os
+    os.makedirs(output_dir, exist_ok=True)
+    # Example shapes (adjust as needed for your NN):
+    input_shape = (27,)   # Example: 27 features per input
+    target_shape = (13,)  # Example: 13 targets per sample
+    mask_shape = (13,)    # Example: 13 mask values per sample
+    def save_bin(filename, arr):
+        arr.astype(np.float32).tofile(os.path.join(output_dir, filename))
+    # Training set
+    train_inputs = np.random.rand(train_data_count, *input_shape)
+    train_targets = np.random.rand(train_data_count, *target_shape)
+    train_mask = np.random.randint(0, 2, size=(train_data_count, *mask_shape))
+    save_bin('train.inputs', train_inputs)
+    save_bin('train.targets', train_targets)
+    save_bin('train.mask', train_mask)
+    # Validation set
+    valid_inputs = np.random.rand(valid_data_count, *input_shape)
+    valid_targets = np.random.rand(valid_data_count, *target_shape)
+    valid_mask = np.random.randint(0, 2, size=(valid_data_count, *mask_shape))
+    save_bin('valid.inputs', valid_inputs)
+    save_bin('valid.targets', valid_targets)
+    save_bin('valid.mask', valid_mask)
+    print(f"✓ DeepStack training/validation data generated in {output_dir}")

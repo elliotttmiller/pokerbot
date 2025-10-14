@@ -53,6 +53,9 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')
 from src.agents import ChampionAgent, CFRAgent, DQNAgent, FixedStrategyAgent, RandomAgent
 from src.evaluation import Evaluator, Trainer
 from src.game import Action, Card, GameState
+from src.game.bucketer import Bucketer
+from src.game.masked_huber_loss import masked_huber_loss
+from src.game.strategy_filling import StrategyFilling
 from src.utils import Config, Logger
 
 

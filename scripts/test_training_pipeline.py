@@ -11,12 +11,18 @@ Usage:
 
 import os
 import sys
-import time
-
-# Add parent directory to path
+# Ensure parent directory is in sys.path for src imports
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-
+import time
+import subprocess
+import numpy as np
 from src.utils import Logger
+from src.agents import ChampionAgent, CFRAgent, DQNAgent, RandomAgent, FixedStrategyAgent
+from src.evaluation import Evaluator, Trainer
+from src.game import GameState, Card, Rank, Suit
+from src.game.bucketer import Bucketer
+from src.game.masked_huber_loss import masked_huber_loss
+from src.game.strategy_filling import StrategyFilling
 
 
 def test_imports():
@@ -91,16 +97,16 @@ def test_training_pipeline():
             
             # Check if model files were created
             model_files = [
-                "models/champion_final.cfr",
-                "models/champion_final.keras"
+                "models/versions/champion_current.cfr",
+                "models/versions/champion_current.keras"
             ]
             
             all_exist = True
             for filepath in model_files:
                 if os.path.exists(filepath):
-                    logger.info(f"    ✓ {filepath} created")
+                    logger.info(f"    [OK] {filepath} created")
                 else:
-                    logger.info(f"    ✗ {filepath} not found")
+                    logger.info(f"    [WARN] {filepath} not found")
                     all_exist = False
             
             return all_exist
@@ -130,7 +136,7 @@ def test_model_loading():
         
         # Load the trained model
         agent = ChampionAgent(name="LoadedAgent", use_pretrained=False)
-        agent.load_strategy("models/champion_final")
+        agent.load_strategy("models/versions/champion_current")
         
         # Verify loaded state
         assert agent.cfr.iterations > 0
@@ -158,7 +164,7 @@ def test_agent_decision_making():
         
         # Load trained agent
         agent = ChampionAgent(name="TestAgent", use_pretrained=False)
-        agent.load_strategy("models/champion_final")
+        agent.load_strategy("models/versions/champion_current")
         
         # Test decision making
         hole_cards = [Card(Rank.ACE, Suit.SPADES), Card(Rank.KING, Suit.HEARTS)]
@@ -196,7 +202,7 @@ def test_validation_script():
             [
                 sys.executable,
                 "scripts/validate_training.py",
-                "--model", "models/champion_final",
+                "--model", "models/versions/champion_current",
                 "--hands", "25"
             ],
             cwd=os.path.abspath(os.path.join(os.path.dirname(__file__), '..')),
@@ -209,11 +215,11 @@ def test_validation_script():
             logger.info("  ✓ Validation completed successfully")
             
             # Check if validation results were created
-            if os.path.exists("models/champion_final_validation.json"):
-                logger.info("    ✓ Validation results saved")
+            if os.path.exists("models/versions/champion_current_validation.json"):
+                logger.info("    [OK] Validation results saved")
                 return True
             else:
-                logger.info("    ✗ Validation results not found")
+                logger.info("    [WARN] Validation results not found")
                 return False
         else:
             logger.error(f"  ✗ Validation failed with exit code {result.returncode}")
@@ -224,6 +230,63 @@ def test_validation_script():
         return False
     except Exception as e:
         logger.error(f"  ✗ Validation test failed: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
+
+
+def test_deepstack_module_integrations():
+    """Test direct integration and correctness of DeepStack modules."""
+    logger = Logger(verbose=True)
+    logger.info("\nTEST 7: Testing DeepStack module integrations...")
+    try:
+        # Bucketer
+        from src.game.bucketer import Bucketer
+        bucketer = Bucketer()
+        bucket_idx = bucketer.get_bucket([], [])
+        assert isinstance(bucket_idx, int)
+        logger.info(f"  [OK] Bucketer abstraction returns bucket index: {bucket_idx}")
+
+        # Masked Huber Loss
+        from src.game.masked_huber_loss import masked_huber_loss
+        import numpy as np
+        y_true = np.ones((2, 13))
+        y_pred = np.zeros((2, 13))
+        mask = np.ones((2, 13))
+        loss = masked_huber_loss(y_true, y_pred, mask)
+        assert loss >= 0
+        logger.info(f"  [OK] Masked Huber loss returns valid value: {loss}")
+
+        # Strategy Filling
+        strategy_filler = StrategyFilling()
+        strategy = np.array([[0.2, 0.3, 0.5], [0.0, 0.0, 0.0]])
+        filled = strategy_filler.fill_missing(strategy)
+        assert np.allclose(filled.sum(axis=1), 1.0)
+        logger.info(f"  [OK] Strategy filling normalizes strategies: {filled}")
+        return True
+    except Exception as e:
+        logger.error(f"  [FAIL] DeepStack module integration test failed: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
+
+
+def test_agent_evaluation():
+    """Test agent benchmarking using Evaluator."""
+    logger = Logger(verbose=True)
+    logger.info("\nTEST 8: Testing agent evaluation and benchmarking...")
+    try:
+        from src.agents import ChampionAgent, RandomAgent
+        from src.evaluation.evaluator import Evaluator
+        agent = ChampionAgent(name="EvalAgent", use_pretrained=False)
+        opponent = RandomAgent()
+        evaluator = Evaluator([agent, opponent])
+        results = evaluator.evaluate_agents(num_hands=10, verbose=False)
+        assert 'wins' in results and 'losses' in results
+        logger.info(f"  [OK] Evaluation results: {results}")
+        return True
+    except Exception as e:
+        logger.error(f"  [FAIL] Agent evaluation test failed: {e}")
         import traceback
         traceback.print_exc()
         return False
@@ -247,6 +310,8 @@ def main():
         ("Model Loading", test_model_loading),
         ("Decision Making", test_agent_decision_making),
         ("Validation", test_validation_script),
+        ("DeepStack Module Integrations", test_deepstack_module_integrations),
+        ("Agent Evaluation", test_agent_evaluation),
     ]
     
     results = {}

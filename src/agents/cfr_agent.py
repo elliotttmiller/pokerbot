@@ -359,11 +359,11 @@ class CFRAgent:
         
         print(f"CFR+ enhancements enabled for {self.name}:")
         if use_regret_matching_plus:
-            print(f"  ✓ Regret matching+ (reset negative regrets)")
+            print(f"  [OK] Regret matching+ (reset negative regrets)")
         if use_pruning:
-            print(f"  ✓ Action pruning (threshold: {prune_threshold})")
+            print(f"  [OK] Action pruning (threshold: {prune_threshold})")
         if use_linear_cfr:
-            print(f"  ✓ Linear CFR (starts at iteration {lcfr_threshold})")
+            print(f"  [OK] Linear CFR (starts at iteration {lcfr_threshold})")
     
     def train_with_cfr_plus(self, num_iterations: int = 1000):
         """
@@ -395,7 +395,7 @@ class CFRAgent:
                 avg_regret = self._compute_average_regret()
                 print(f"  Iteration {i + 1}/{num_iterations} - Avg Regret: {avg_regret:.6f}")
         
-        print(f"✓ CFR+ training complete ({self.iterations} total iterations)")
+        print(f"[OK] CFR+ training complete ({self.iterations} total iterations)")
     
     def _reset_negative_regrets(self):
         """CFR+: Reset negative regrets to 0 for faster convergence."""
