@@ -5,7 +5,9 @@ A comprehensive poker bot system with multiple AI agents, including Deep Q-Netwo
 ## Features
 
 - **Multiple AI Agents**:
+  - **🏆 Champion Agent**: Unified CFR + DQN hybrid with pre-trained models - our most advanced agent
   - **DQN Agent**: Deep reinforcement learning agent using Q-learning
+  - **CFR Agent**: Counterfactual Regret Minimization for game-theoretic optimal play
   - **Fixed Strategy Agent**: GTO-inspired fixed strategy with pot odds calculations
   - **Random Agent**: Baseline random decision-making agent
 
@@ -56,6 +58,37 @@ export OPENAI_API_KEY=your_api_key_here
 ```
 
 ## Usage
+
+### 🏆 Using the Champion Agent
+
+The Champion Agent is our most advanced AI, combining CFR, DQN, and pre-trained models:
+
+```bash
+# Run the demo to see it in action
+python demo_champion.py
+```
+
+Quick start in code:
+```python
+from src.agents import ChampionAgent
+from src.game import Card, Rank, Suit
+
+# Create champion agent with pre-trained knowledge
+champion = ChampionAgent(name="Champion", use_pretrained=True)
+
+# Make a decision
+hole_cards = [Card(Rank.ACE, Suit.SPADES), Card(Rank.KING, Suit.HEARTS)]
+action, raise_amount = champion.choose_action(
+    hole_cards=hole_cards,
+    community_cards=[],
+    pot=100,
+    current_bet=20,
+    player_stack=1000,
+    opponent_bet=20
+)
+```
+
+**See [CHAMPION_AGENT.md](CHAMPION_AGENT.md) for complete documentation.**
 
 ### Training a DQN Agent
 
