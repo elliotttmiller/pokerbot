@@ -5,6 +5,7 @@ from enum import Enum
 from typing import List, Optional
 
 from .card import Card, Deck
+from src.deepstack.hand_evaluator import HandEvaluator
 
 
 class Action(Enum):
@@ -227,8 +228,6 @@ class GameState:
         Returns:
             List of player indices who won
         """
-        from .hand_evaluator import HandEvaluator
-        
         active_players = [(i, p) for i, p in enumerate(self.players) if not p.folded]
         
         if len(active_players) == 1:

@@ -3,10 +3,10 @@ DeepStack Lookahead module integration for pokerbot agents.
 Wraps key methods: build_lookahead, resolve_first_node, resolve, get_chance_action_cfv, get_results.
 """
 import numpy as np
-from ..game.tree_builder import PokerTreeBuilder, PLAYERS, NODE_TYPES, ACTIONS, ACPC_ACTIONS
-from ..game.terminal_equity import TerminalEquity
-from ..game.tree_cfr import TreeCFR
-from ..game.cfrd_gadget import CFRDGadget
+from src.deepstack.tree_builder import PokerTreeBuilder, PLAYERS, NODE_TYPES, ACTIONS, ACPC_ACTIONS
+from src.deepstack.terminal_equity import TerminalEquity
+from src.deepstack.tree_cfr import TreeCFR
+from src.deepstack.cfrd_gadget import CFRDGadget
 
 class DeepStackLookahead:
     def __init__(self, params=None):

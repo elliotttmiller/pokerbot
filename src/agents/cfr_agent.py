@@ -19,7 +19,8 @@ from typing import Dict, List, Optional, Tuple
 
 import numpy as np
 
-from ..game import Action, Card, GameState, HandEvaluator
+from ..game import Action, Card, GameState
+from src.deepstack.hand_evaluator import HandEvaluator
 
 
 class InfoSet:

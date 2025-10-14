@@ -4,7 +4,7 @@ from collections import Counter
 from enum import IntEnum
 from typing import List, Tuple
 
-from .card import Card, Rank
+from src.game.card import Card, Rank
 
 
 class HandRank(IntEnum):
