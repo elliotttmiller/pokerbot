@@ -6,7 +6,11 @@ A comprehensive poker bot system with multiple AI agents, including advanced CFR
 
 ### 🏆 Advanced AI Agents
 
-- **Champion Agent**: Unified CFR + DQN hybrid with pre-trained models
+- **Champion Agent**: Unified CFR + DQN hybrid with pre-trained models and **DeepStack continual re-solving**
+- **DeepStack Engine**: Complete Python/PyTorch port of the championship DeepStack AI
+  - Continual re-solving for dynamic game tree solving
+  - Neural network value estimation for depth-limited search
+  - CFR-based game-theoretic optimal play
 - **Search Agent**: Real-time depth-limited search with blueprint strategy
 - **Advanced CFR Agent**: CFR with pruning, linear discounting, and progressive training
 - **DQN Agent**: Deep reinforcement learning agent using Q-learning
@@ -23,11 +27,15 @@ A comprehensive poker bot system with multiple AI agents, including advanced CFR
 
 ### 🎯 Advanced Features
 
+- **DeepStack Continual Re-solving**: Dynamic game tree solving during live play
+  - Depth-limited search with neural network value estimation
+  - CFRDGadget for opponent range reconstruction
+  - Sub-second decision making via efficient CFR
 - **Blueprint + Real-time Search**: Two-stage decision making
 - **Information Set Abstraction**: Reduces 56B+ states to tractable sizes
 - **CFR with Pruning (CFRp)**: 20x+ speedup through action pruning
 - **Linear CFR**: Faster convergence via discounting
-- **Pre-trained Models**: DeepStack (50K+ epochs) and equity tables
+- **Pre-trained Models**: DeepStack value networks and equity tables
 
 ### 🎮 Vision System
 
@@ -54,6 +62,14 @@ pokerbot/
 │   │   ├── cfr_agent.py
 │   │   ├── dqn_agent.py
 │   │   └── ...
+│   ├── deepstack/         # DeepStack AI engine (ported from Lua)
+│   │   ├── tree_builder.py      # Game tree construction
+│   │   ├── tree_cfr.py          # CFR solver
+│   │   ├── terminal_equity.py   # Equity calculation
+│   │   ├── cfrd_gadget.py       # Range reconstruction
+│   │   ├── value_nn.py          # Neural network
+│   │   ├── resolving.py         # Continual re-solving API
+│   │   └── ...
 │   ├── game/              # Game engine and utilities
 │   │   ├── card_abstraction.py
 │   │   ├── game_state.py
@@ -68,16 +84,21 @@ pokerbot/
 │   ├── train.py
 │   ├── play.py
 │   └── evaluate.py
+├── tests/                 # Test suite
+│   └── test_deepstack_core.py
 ├── examples/              # Examples and demos
 │   ├── demo_champion.py
 │   ├── example_champion.py
 │   └── test_champion.py
 ├── docs/                  # Documentation
+│   ├── PORTING_BLUEPRINT.md
+│   ├── DEEPSTACK_GUIDE.md
 │   ├── CHAMPION_AGENT.md
-│   ├── PLURIBUS_ANALYSIS.md
+│   └── ...
+├── data/                  # Training data and documentation
+│   ├── doc/              # Original DeepStack Lua documentation
 │   └── ...
 ├── models/                # Saved models and pre-trained weights
-├── data/                  # Training data and equity tables
 └── README.md
 ```
 
@@ -121,6 +142,43 @@ export OPENAI_API_KEY=your_api_key_here
 ```
 
 ## Usage
+
+### 🚀 Using DeepStack Engine
+
+The DeepStack engine provides world-class game-theoretic poker play:
+
+```python
+from src.deepstack.resolving import Resolving
+import numpy as np
+
+# Initialize resolver
+resolver = Resolving(num_hands=6, game_variant='leduc')
+
+# Define game state
+node_params = {
+    'street': 0,
+    'bets': [20, 20],
+    'current_player': 1,
+    'board': [],
+    'bet_sizing': [1.0]  # Pot-sized bets
+}
+
+# Player and opponent ranges
+player_range = np.ones(6) / 6
+opponent_range = np.ones(6) / 6
+
+# Solve using continual re-solving
+resolver.resolve_first_node(node_params, player_range, opponent_range, 
+                             iterations=500)
+
+# Get optimal strategy
+actions = resolver.get_possible_actions()
+for action in actions:
+    prob = resolver.get_action_strategy(action)
+    print(f"P({action}) = {prob:.4f}")
+```
+
+**See [docs/DEEPSTACK_GUIDE.md](docs/DEEPSTACK_GUIDE.md) for complete DeepStack documentation.**
 
 ### 🏆 Using the Champion Agent
 
@@ -312,18 +370,24 @@ Example results after 1000 hands:
 
 This project incorporates concepts and techniques from:
 
-1. **GTO Poker Bot** - https://github.com/arnenoori/gto-poker-bot
+1. **DeepStack** - https://www.deepstack.ai/
+   - Complete Python/PyTorch port of the championship DeepStack AI
+   - Continual re-solving with depth-limited search
+   - Original Lua documentation in `data/doc/`
+   
+2. **GTO Poker Bot** - https://github.com/arnenoori/gto-poker-bot
    - Vision-based game state detection
    - Automated playing framework
 
-2. **Poker AI** - https://github.com/dickreuter/Poker
+3. **Poker AI** - https://github.com/dickreuter/Poker
    - Advanced poker strategies
    - Pre-trained models
 
-3. **DeepStack-Leduc** - https://github.com/lifrordi/DeepStack-Leduc
+4. **DeepStack-Leduc** - https://github.com/lifrordi/DeepStack-Leduc
    - Deep counterfactual regret minimization
+   - Reference implementation
 
-4. **Libratus** - https://noambrown.github.io/papers/17-IJCAI-Libratus.pdf
+5. **Libratus** - https://noambrown.github.io/papers/17-IJCAI-Libratus.pdf
    - Game theory optimal strategies
    - Abstraction techniques
 
