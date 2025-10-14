@@ -1,0 +1,45 @@
+{
+  "state_validation": {
+    "epsilon_decayed": false,
+    "has_memory": false,
+    "cfr_trained": true,
+    "has_infosets": true,
+    "has_model": true
+  },
+  "baseline_performance": {
+    "random": {
+      "wins": 25,
+      "losses": 25,
+      "win_rate": 0.5,
+      "avg_reward": 61.14
+    },
+    "fixed": {
+      "wins": 10,
+      "losses": 40,
+      "win_rate": 0.2,
+      "avg_reward": -76.56
+    },
+    "cfr": {
+      "wins": 16,
+      "losses": 34,
+      "win_rate": 0.32,
+      "avg_reward": 12.5
+    },
+    "untrained_champion": {
+      "wins": 25,
+      "losses": 25,
+      "win_rate": 0.5,
+      "avg_reward": 9.2
+    }
+  },
+  "consistency": {
+    "consistency_score": 0.9,
+    "unique_actions": 2,
+    "passed": true
+  },
+  "learning": {
+    "epsilon_learning": true,
+    "memory_utilized": false,
+    "cfr_converged": false
+  }
+}

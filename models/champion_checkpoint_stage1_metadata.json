@@ -1,0 +1,23 @@
+{
+  "timestamp": "2025-10-14T12:45:40.333111",
+  "total_episodes": 0,
+  "total_hands": 0,
+  "current_stage": 1,
+  "epsilon": 0.3,
+  "memory_size": 0,
+  "cfr_iterations": 20,
+  "metrics": {
+    "training_rewards": [],
+    "win_rates": [],
+    "evaluation_scores": [],
+    "epsilon_values": [],
+    "loss_values": [],
+    "stage_transitions": [
+      {
+        "stage": 1,
+        "episode": 0,
+        "timestamp": 0.0002543926239013672
+      }
+    ]
+  }
+}

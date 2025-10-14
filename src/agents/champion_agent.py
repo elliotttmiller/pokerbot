@@ -515,7 +515,7 @@ class ChampionAgent(BaseAgent):
         Save champion agent strategy to files.
         
         Args:
-            filepath_prefix: Prefix for save files (will create .cfr and .dqn files)
+            filepath_prefix: Prefix for save files (will create .cfr and .keras files)
         """
         # Save CFR strategy
         self.cfr.save_strategy(f"{filepath_prefix}.cfr")
@@ -523,8 +523,11 @@ class ChampionAgent(BaseAgent):
         
         # Save DQN model
         if self.model:
-            self.model.save(f"{filepath_prefix}.dqn")
-            print(f"✓ DQN model saved to {filepath_prefix}.dqn")
+            try:
+                self.model.save(f"{filepath_prefix}.keras")
+                print(f"✓ DQN model saved to {filepath_prefix}.keras")
+            except Exception as e:
+                print(f"⚠ DQN model save failed: {e}")
     
     def load_strategy(self, filepath_prefix: str):
         """
@@ -543,10 +546,17 @@ class ChampionAgent(BaseAgent):
         # Load DQN model
         if self.model:
             try:
-                self.model.load_weights(f"{filepath_prefix}.dqn")
-                print(f"✓ DQN model loaded from {filepath_prefix}.dqn")
-            except Exception:
-                print(f"⚠ DQN model file not found: {filepath_prefix}.dqn")
+                # Try .keras format first (new format)
+                from tensorflow import keras
+                self.model = keras.models.load_model(f"{filepath_prefix}.keras")
+                print(f"✓ DQN model loaded from {filepath_prefix}.keras")
+            except Exception as e:
+                try:
+                    # Fallback to .h5 format
+                    self.model.load_weights(f"{filepath_prefix}.h5")
+                    print(f"✓ DQN model loaded from {filepath_prefix}.h5")
+                except Exception:
+                    print(f"⚠ DQN model file not found: {filepath_prefix}.keras or .h5")
     
     def set_training_mode(self, training: bool):
         """
