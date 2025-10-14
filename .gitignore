@@ -126,6 +126,8 @@ dmypy.json
 screenshots/
 models/*.h5
 models/*.keras
+models/*.cfr
+models/*.json
 logs/
 data/*.csv
 data/unified_training_data.json
@@ -136,6 +138,7 @@ data/unified_training_data.json
 !models/pretrained/*.model
 !models/pretrained/*.info
 !data/equity_tables/*.json
+!models/README.md
 
 # OS specific
 .DS_Store

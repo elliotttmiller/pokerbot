@@ -1,118 +1,50 @@
-# Pre-trained Champion Models
+# Models Directory
 
-This directory contains pre-trained models from world-class poker AI projects.
+This directory stores trained Champion Agent models.
 
-## DeepStack Models
+## File Types
 
-Located in `models/pretrained/`:
+- `*.cfr` - CFR (Counterfactual Regret Minimization) strategy files
+- `*.keras` - DQN neural network models  
+- `*_metadata.json` - Training metadata and statistics
+- `*_validation.json` - Validation test results
 
-### CPU Model
-- **File**: `final_cpu.model`
-- **Size**: ~1 MB
-- **Source**: [DeepStack-Leduc](https://github.com/lifrordi/DeepStack-Leduc)
-- **Training**: 50,000+ epochs
-- **Format**: Lua Torch model
-- **Purpose**: Neural network value predictor for poker game states
-- **Performance**: Champion-level poker AI
+## Generated Files
 
-### GPU Model  
-- **File**: `final_gpu.model`
-- **Size**: ~1 MB
-- **Source**: [DeepStack-Leduc](https://github.com/lifrordi/DeepStack-Leduc)
-- **Training**: 50,000+ epochs
-- **Format**: Lua Torch model
-- **Purpose**: GPU-optimized version for faster inference
-- **Performance**: Champion-level poker AI
+When you run training, these files are automatically created:
 
-## Model Information
+### During Training
+- `champion_checkpoint_stage1.*` - After Stage 1 (CFR warmup)
+- `champion_checkpoint_stage2_epN.*` - Stage 2 checkpoints (every N episodes)
+- `champion_checkpoint_stage3_epN.*` - Stage 3 checkpoints (every N episodes)
 
-Each model comes with a `.info` file containing training metadata:
-- Epoch count
-- Validation loss
-- Training configuration
+### After Training
+- `champion_final.cfr` - Final CFR strategy
+- `champion_final.keras` - Final DQN model
+- `champion_final_metadata.json` - Final training statistics
+- `champion_final_validation.json` - Validation results (after running validation script)
 
 ## Usage
 
-### Loading Pre-trained Models
+Load a trained model:
 
 ```python
-from src.utils import ModelLoader
+from src.agents import ChampionAgent
 
-# Initialize model loader
-loader = ModelLoader()
+# Load trained agent
+agent = ChampionAgent(name="TrainedChampion", use_pretrained=False)
+agent.load_strategy("models/champion_final")
 
-# Load DeepStack CPU model
-model_info = loader.load_deepstack_model(use_gpu=False)
-print(f"Loaded model: {model_info['model_path']}")
-print(f"Size: {model_info['size_mb']:.2f} MB")
-
-# List all available models
-models = loader.list_available_models()
-for model in models:
-    print(f"{model['name']}: {model['size_mb']:.2f} MB")
+# Use the agent
+action, raise_amt = agent.choose_action(hole_cards, community_cards, pot, bet, stack, opp_bet)
 ```
 
-### Using with Training Data
+## Note
 
-```python
-from src.utils import initialize_champion_models
+Model files are not committed to git (see `.gitignore`). You need to train your own models using:
 
-# Load all champion models and data
-model_loader, data_manager = initialize_champion_models()
-
-# Access model information
-deepstack = model_loader.get_model_info('deepstack')
-print(f"DeepStack loaded: {deepstack['model_type']}")
+```bash
+python scripts/train_champion.py --mode smoketest
 ```
 
-## Model Architecture
-
-The DeepStack models are neural networks trained to predict the value (expected utility) of each poker game state. They use:
-
-- **Input**: Poker game state (cards, bets, pot)
-- **Architecture**: Multi-layer neural network
-- **Output**: Value prediction for each possible action
-- **Training Method**: Supervised learning on generated poker situations
-
-## Integration
-
-These pre-trained models serve as the **baseline/starting brain** for our agents:
-
-1. **DQN Agent**: Can use as initialization
-2. **CFR Agent**: Can use values for better estimates
-3. **Hybrid Agents**: Combine with other strategies
-
-## Performance
-
-These are champion models from the DeepStack project that:
-- Beat professional poker players
-- Use continuous re-solving algorithm
-- Approximate Nash equilibrium
-- Handle imperfect information
-
-## Future Models
-
-Additional pre-trained models to integrate:
-- [ ] Libratus blueprint strategies
-- [ ] Genetic algorithm evolved strategies
-- [ ] Range-based models
-- [ ] Multi-opponent models
-
-## References
-
-1. **DeepStack-Leduc**: https://github.com/lifrordi/DeepStack-Leduc
-2. **DeepStack Paper**: https://www.deepstack.ai/s/DeepStack.pdf
-3. **Original DeepStack**: https://www.deepstack.ai
-
-## Notes
-
-- Models are in Lua Torch format
-- For production use with PyTorch, conversion would be needed
-- Models can be used for value estimation even without full conversion
-- Represent state-of-the-art poker AI from 2016-2017
-
-## License
-
-These models are from open-source projects. Please respect the original licenses:
-- DeepStack-Leduc: Check repository for license terms
-- Use for educational and research purposes
+See `docs/TRAINING_GUIDE.md` for complete instructions.
