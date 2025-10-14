@@ -34,10 +34,10 @@ def test_imports():
         from src.agents import ChampionAgent, CFRAgent, DQNAgent, RandomAgent, FixedStrategyAgent
         from src.evaluation import Evaluator, Trainer
         from src.game import GameState, Card, Rank, Suit
-        logger.info("  ✓ All imports successful")
+        logger.info("  [OK] All imports successful")
         return True
     except Exception as e:
-        logger.error(f"  ✗ Import failed: {e}")
+        logger.error(f"  [FAIL] Import failed: {e}")
         return False
 
 
@@ -56,13 +56,13 @@ def test_agent_creation():
         assert agent.cfr is not None
         assert agent.model is not None
         
-        logger.info("  ✓ Agent created successfully")
+        logger.info("  [OK] Agent created successfully")
         logger.info(f"    State size: {agent.state_size}")
         logger.info(f"    Action size: {agent.action_size}")
         logger.info(f"    Epsilon: {agent.epsilon}")
         return True
     except Exception as e:
-        logger.error(f"  ✗ Agent creation failed: {e}")
+        logger.error(f"  [FAIL] Agent creation failed: {e}")
         import traceback
         traceback.print_exc()
         return False
@@ -93,7 +93,7 @@ def test_training_pipeline():
         )
         
         if result.returncode == 0:
-            logger.info("  ✓ Training completed successfully")
+            logger.info("  [OK] Training completed successfully")
             
             # Check if model files were created
             model_files = [
@@ -111,16 +111,16 @@ def test_training_pipeline():
             
             return all_exist
         else:
-            logger.error(f"  ✗ Training failed with exit code {result.returncode}")
+            logger.error(f"  [FAIL] Training failed with exit code {result.returncode}")
             error_msg = result.stderr[-500:] if result.stderr else "No error output"
             logger.error(f"  Error output: {error_msg}")
             return False
             
     except subprocess.TimeoutExpired:
-        logger.error("  ✗ Training timed out")
+        logger.error("  [FAIL] Training timed out")
         return False
     except Exception as e:
-        logger.error(f"  ✗ Training pipeline test failed: {e}")
+        logger.error(f"  [FAIL] Training pipeline test failed: {e}")
         import traceback
         traceback.print_exc()
         return False
@@ -142,12 +142,12 @@ def test_model_loading():
         assert agent.cfr.iterations > 0
         assert len(agent.cfr.infosets) > 0
         
-        logger.info("  ✓ Model loaded successfully")
+        logger.info("  [OK] Model loaded successfully")
         logger.info(f"    CFR iterations: {agent.cfr.iterations}")
         logger.info(f"    Information sets: {len(agent.cfr.infosets)}")
         return True
     except Exception as e:
-        logger.error(f"  ✗ Model loading failed: {e}")
+        logger.error(f"  [FAIL] Model loading failed: {e}")
         import traceback
         traceback.print_exc()
         return False
@@ -178,12 +178,12 @@ def test_agent_decision_making():
             current_bet, player_stack, current_bet  # opponent_bet same as current_bet in simple case
         )
         
-        logger.info("  ✓ Agent made decision successfully")
+        logger.info("  [OK] Agent made decision successfully")
         logger.info(f"    Action: {action}")
         logger.info(f"    Raise amount: {raise_amt}")
         return True
     except Exception as e:
-        logger.error(f"  ✗ Decision making failed: {e}")
+        logger.error(f"  [FAIL] Decision making failed: {e}")
         import traceback
         traceback.print_exc()
         return False
@@ -212,7 +212,7 @@ def test_validation_script():
         )
         
         if result.returncode == 0:
-            logger.info("  ✓ Validation completed successfully")
+            logger.info("  [OK] Validation completed successfully")
             
             # Check if validation results were created
             if os.path.exists("models/versions/champion_current_validation.json"):
@@ -222,14 +222,14 @@ def test_validation_script():
                 logger.info("    [WARN] Validation results not found")
                 return False
         else:
-            logger.error(f"  ✗ Validation failed with exit code {result.returncode}")
+            logger.error(f"  [FAIL] Validation failed with exit code {result.returncode}")
             return False
             
     except subprocess.TimeoutExpired:
-        logger.error("  ✗ Validation timed out")
+        logger.error("  [FAIL] Validation timed out")
         return False
     except Exception as e:
-        logger.error(f"  ✗ Validation test failed: {e}")
+        logger.error(f"  [FAIL] Validation test failed: {e}")
         import traceback
         traceback.print_exc()
         return False
@@ -333,7 +333,7 @@ def main():
     total = len(results)
     
     for test_name, passed_test in results.items():
-        status = "✓ PASSED" if passed_test else "✗ FAILED"
+        status = "[OK] PASSED" if passed_test else "[FAIL] FAILED"
         logger.info(f"  {test_name}: {status}")
     
     logger.info("")
@@ -342,10 +342,10 @@ def main():
     logger.info("="*70)
     
     if passed == total:
-        logger.info("\n🎉 ALL TESTS PASSED! Training pipeline is working correctly.")
+        logger.info("\n[OK] ALL TESTS PASSED! Training pipeline is working correctly.")
         return 0
     else:
-        logger.error(f"\n❌ {total - passed} test(s) failed. Please review the errors above.")
+        logger.error(f"\n[FAIL] {total - passed} test(s) failed. Please review the errors above.")
         return 1
 
 

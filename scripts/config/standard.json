@@ -1,0 +1,11 @@
+{
+  "stage1_cfr_iterations": 200,
+  "stage2_selfplay_episodes": 100,
+  "stage3_vicarious_episodes": 100,
+  "evaluation_interval": 10,
+  "save_interval": 20,
+  "batch_size": 8,
+  "validation_hands": 50,
+  "log_dir": "logs",
+  "report_dir": "models/reports"
+}

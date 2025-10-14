@@ -1,7 +1,7 @@
 {
   "previous_best_exists": true,
   "is_better": true,
-  "win_rate": 0.505,
-  "avg_reward": 26.1,
-  "total_hands": 200
+  "win_rate": 0.52,
+  "avg_reward": 33.4,
+  "total_hands": 50
 }

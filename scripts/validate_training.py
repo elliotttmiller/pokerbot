@@ -47,7 +47,7 @@ class TrainingValidator:
         self.logger.info("Loading trained Champion Agent...")
         self.agent = ChampionAgent(name="TrainedChampion", use_pretrained=False)
         self.agent.load_strategy(model_path)
-        self.logger.info("✓ Agent loaded successfully")
+        self.logger.info("[OK] Agent loaded successfully")
         
         # Create baseline agents for comparison
         self.baseline_agents = self._create_baseline_agents()
@@ -114,26 +114,26 @@ class TrainingValidator:
         
         # Check epsilon (should be decayed from initial)
         checks['epsilon_decayed'] = self.agent.epsilon < 0.3
-        self.logger.info(f"  Epsilon value: {self.agent.epsilon:.4f} {'✓' if checks['epsilon_decayed'] else '✗'}")
+        self.logger.info(f"  Epsilon value: {self.agent.epsilon:.4f} {'[OK]' if checks['epsilon_decayed'] else '[FAIL]'}")
         
         # Check memory size
         checks['has_memory'] = len(self.agent.memory) > 0
-        self.logger.info(f"  Memory size: {len(self.agent.memory)} {'✓' if checks['has_memory'] else '✗'}")
+        self.logger.info(f"  Memory size: {len(self.agent.memory)} {'[OK]' if checks['has_memory'] else '[FAIL]'}")
         
         # Check CFR training
         checks['cfr_trained'] = self.agent.cfr.iterations > 0
-        self.logger.info(f"  CFR iterations: {self.agent.cfr.iterations} {'✓' if checks['cfr_trained'] else '✗'}")
+        self.logger.info(f"  CFR iterations: {self.agent.cfr.iterations} {'[OK]' if checks['cfr_trained'] else '[FAIL]'}")
         
         # Check information sets
         checks['has_infosets'] = len(self.agent.cfr.infosets) > 0
-        self.logger.info(f"  Information sets: {len(self.agent.cfr.infosets)} {'✓' if checks['has_infosets'] else '✗'}")
+        self.logger.info(f"  Information sets: {len(self.agent.cfr.infosets)} {'[OK]' if checks['has_infosets'] else '[FAIL]'}")
         
         # Check model exists
         checks['has_model'] = self.agent.model is not None
-        self.logger.info(f"  DQN model: {'Present ✓' if checks['has_model'] else 'Missing ✗'}")
+        self.logger.info(f"  DQN model: {'Present [OK]' if checks['has_model'] else 'Missing [FAIL]'}")
         
         all_passed = all(checks.values())
-        self.logger.info(f"\n  Overall: {'PASSED ✓' if all_passed else 'FAILED ✗'}")
+        self.logger.info(f"\n  Overall: {'PASSED [OK]' if all_passed else 'FAILED [FAIL]'}")
         
         return checks
     
@@ -171,7 +171,7 @@ class TrainingValidator:
             
             # Determine if performance is acceptable
             acceptable = win_rate >= 0.45  # Should win at least 45% against decent opponents
-            status = "✓" if acceptable else "✗"
+            status = "[OK]" if acceptable else "[FAIL]"
             
             self.logger.info(f"    Win Rate: {win_rate:.2%} {status}")
             self.logger.info(f"    Avg Reward: {avg_reward:.2f}")
@@ -303,7 +303,7 @@ class TrainingValidator:
         
         self.logger.info(f"    Unique actions: {len(unique_actions)}")
         self.logger.info(f"    Consistency score: {consistency_score:.2%}")
-        self.logger.info(f"    Status: {'✓' if consistency_score > 0.5 else '✗'}")
+        self.logger.info(f"    Status: {'[OK]' if consistency_score > 0.5 else '[FAIL]'}")
         
         return {
             'consistency_score': consistency_score,
@@ -319,19 +319,19 @@ class TrainingValidator:
         
         # Check that epsilon has decayed (agent explored and is now exploiting)
         checks['epsilon_learning'] = self.agent.epsilon < self.agent.epsilon_min + 0.1
-        self.logger.info(f"    Epsilon decay: {self.agent.epsilon:.4f} {'✓' if checks['epsilon_learning'] else '✗'}")
+        self.logger.info(f"    Epsilon decay: {self.agent.epsilon:.4f} {'[OK]' if checks['epsilon_learning'] else '[FAIL]'}")
         
         # Check memory utilization
         memory_usage = len(self.agent.memory) / self.agent.memory.maxlen
         checks['memory_utilized'] = memory_usage > 0.1
-        self.logger.info(f"    Memory usage: {memory_usage:.2%} {'✓' if checks['memory_utilized'] else '✗'}")
+        self.logger.info(f"    Memory usage: {memory_usage:.2%} {'[OK]' if checks['memory_utilized'] else '[FAIL]'}")
         
         # Check CFR convergence (has trained enough)
         checks['cfr_converged'] = self.agent.cfr.iterations >= 50
-        self.logger.info(f"    CFR convergence: {self.agent.cfr.iterations} iterations {'✓' if checks['cfr_converged'] else '✗'}")
+        self.logger.info(f"    CFR convergence: {self.agent.cfr.iterations} iterations {'[OK]' if checks['cfr_converged'] else '[FAIL]'}")
         
         all_passed = all(checks.values())
-        self.logger.info(f"\n    Overall: {'PASSED ✓' if all_passed else 'FAILED ✗'}")
+        self.logger.info(f"\n    Overall: {'PASSED [OK]' if all_passed else 'FAILED [FAIL]'}")
         
         return checks
     
@@ -376,11 +376,11 @@ class TrainingValidator:
         self.logger.info(f"Tests Passed: {passed_tests}/{total_tests} ({pass_rate:.1%})")
         
         if pass_rate >= 0.8:
-            self.logger.info("Status: EXCELLENT ✓✓✓")
+            self.logger.info("Status: EXCELLENT [OK][OK][OK]")
         elif pass_rate >= 0.6:
-            self.logger.info("Status: GOOD ✓✓")
+            self.logger.info("Status: GOOD [OK][OK]")
         elif pass_rate >= 0.4:
-            self.logger.info("Status: ACCEPTABLE ✓")
+            self.logger.info("Status: ACCEPTABLE [OK]")
         else:
             self.logger.info("Status: NEEDS IMPROVEMENT ✗")
         

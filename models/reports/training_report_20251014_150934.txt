@@ -1,0 +1,44 @@
+======================================================================
+CHAMPION AGENT TRAINING REPORT
+======================================================================
+
+Training Mode: STANDARD
+Total Training Time: 5.45 minutes
+Total Episodes: 200
+Total Hands Played: 200
+
+Stage Summary:
+  Stage 1 (CFR Warmup): 200 iterations
+  Stage 2 (Self-Play): 100 episodes
+  Stage 3 (Vicarious): 100 episodes
+
+Final Agent State:
+  Epsilon: 0.0000
+  Memory Size: 1004
+  CFR Iterations: 600
+  Information Sets: 191
+
+Final Evaluation Results:
+  vs EvalRandom:
+    Win Rate: 64.00%
+    Avg Reward: 56.80
+  vs EvalFixed:
+    Win Rate: 36.00%
+    Avg Reward: 372.58
+  vs EvalCFR:
+    Win Rate: 52.00%
+    Avg Reward: 62.60
+
+Model Comparison vs Previous Best:
+  Win Rate: 42.00%
+  Avg Reward: 344.40
+  Result: [FAIL] Previous model is still better
+  Status: Saved as champion_current only
+
+Vicarious Learning Performance by Opponent Type:
+  RANDOM: Win Rate 30.43%, Avg Reward 20.87, Difficulty 0.70
+  FIXED: Win Rate 19.23%, Avg Reward -82.50, Difficulty 0.81
+  CFR: Win Rate 57.14%, Avg Reward 37.86, Difficulty 0.43
+  DQN: Win Rate 81.82%, Avg Reward 63.18, Difficulty 0.18
+
+======================================================================

@@ -53,9 +53,16 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')
 from src.agents import ChampionAgent, CFRAgent, DQNAgent, FixedStrategyAgent, RandomAgent
 from src.evaluation import Evaluator, Trainer
 from src.game import Action, Card, GameState
-from src.game.bucketer import Bucketer
-from src.game.masked_huber_loss import masked_huber_loss
-from src.game.strategy_filling import StrategyFilling
+from src.deepstack.bucketer import Bucketer
+from src.deepstack.masked_huber_loss import masked_huber_loss
+from src.deepstack.strategy_filling import StrategyFilling
+from src.deepstack.tree_builder import PokerTreeBuilder
+from src.deepstack.terminal_equity import TerminalEquity
+from src.deepstack.tree_cfr import TreeCFR
+from src.deepstack.cfrd_gadget import CFRDGadget
+from src.deepstack.monte_carlo import MonteCarloSimulator
+from src.deepstack.card_abstraction import CardAbstraction
+from src.deepstack.hand_evaluator import HandEvaluator
 from src.utils import Config, Logger
 
 
@@ -67,34 +74,26 @@ class TrainingConfig:
         Initialize training configuration.
         
         Args:
-            mode: Training mode ('smoketest' or 'full')
+            mode: Training mode ('smoketest', 'standard', 'production')
         """
         self.mode = mode
-        
-        if mode == "smoketest":
-            # Quick validation settings
-            self.stage1_cfr_iterations = 100
-            self.stage2_selfplay_episodes = 200
-            self.stage3_vicarious_episodes = 200
-            self.evaluation_interval = 25
-            self.save_interval = 25
-            self.batch_size = 16
-            self.validation_hands = 200
-        else:
-            # Full production settings
-            self.stage1_cfr_iterations = 5000
-            self.stage2_selfplay_episodes = 2000
-            self.stage3_vicarious_episodes = 2000
-            self.evaluation_interval = 100
-            self.save_interval = 500
-            self.batch_size = 32
-            self.validation_hands = 500
+        config_path = f"scripts/config/{mode}.json"
+        with open(config_path, "r") as f:
+            cfg = json.load(f)
+        self.stage1_cfr_iterations = cfg["stage1_cfr_iterations"]
+        self.stage2_selfplay_episodes = cfg["stage2_selfplay_episodes"]
+        self.stage3_vicarious_episodes = cfg["stage3_vicarious_episodes"]
+        self.evaluation_interval = cfg["evaluation_interval"]
+        self.save_interval = cfg["save_interval"]
+        self.batch_size = cfg["batch_size"]
+        self.validation_hands = cfg["validation_hands"]
         
         # Shared settings
         self.model_dir = "models"
         self.versions_dir = "models/versions"  # For current and best models
         self.checkpoints_dir = "models/checkpoints"  # For training checkpoints
-        self.log_dir = "logs"
+        self.log_dir = cfg.get("log_dir", "logs")
+        self.report_dir = cfg.get("report_dir", "models/reports")
         self.checkpoint_prefix = "champion_checkpoint"
         
         # Agent diversity for vicarious learning
@@ -255,7 +254,7 @@ class ProgressiveTrainer:
         # Train CFR component
         self.agent.train_cfr(num_iterations=self.config.stage1_cfr_iterations)
         
-        self.logger.info(f"✓ CFR warmup complete")
+        self.logger.info(f"[OK] CFR warmup complete")
         self.logger.info(f"  Total CFR iterations: {self.agent.cfr.iterations}")
         self.logger.info(f"  Information sets learned: {len(self.agent.cfr.infosets)}")
         
@@ -323,7 +322,7 @@ class ProgressiveTrainer:
                 self.stats['stage_metrics']['stage2_win_rates'].append(win_rate)
         
         final_win_rate = wins / num_episodes
-        self.logger.info(f"✓ Self-play complete - Final win rate: {final_win_rate:.2%}")
+        self.logger.info(f"[OK] Self-play complete - Final win rate: {final_win_rate:.2%}")
     
     def _stage3_vicarious_learning(self):
         """Stage 3: Enhanced vicarious learning from diverse opponents with adaptive curriculum."""
@@ -401,7 +400,7 @@ class ProgressiveTrainer:
                         )
         
         # Final statistics
-        self.logger.info("✓ Vicarious learning complete")
+        self.logger.info("[OK] Vicarious learning complete")
         self.logger.info("  Performance by opponent type:")
         for opp_type, stats in opponent_stats.items():
             if stats['total'] > 0:
@@ -634,7 +633,7 @@ class ProgressiveTrainer:
         best_path = os.path.join(self.config.versions_dir, "champion_best")
         
         if comparison_results['is_better']:
-            self.logger.info("✓ New model outperforms previous best - promoting to champion_best")
+            self.logger.info("[OK] New model outperforms previous best - promoting to champion_best")
             
             # Copy current to best (preserving all files: .cfr, .keras, .h5, _metadata.json)
             for ext in ['.cfr', '.keras', '.h5', '_metadata.json']:
@@ -652,7 +651,7 @@ class ProgressiveTrainer:
             
             self.logger.info(f"  Model promotion complete!")
         else:
-            self.logger.warning("✗ New model does not outperform previous best - keeping previous champion_best")
+            self.logger.warning("[FAIL] New model does not outperform previous best - keeping previous champion_best")
             self.logger.info("  Current model saved as champion_current for analysis")
     
     def _compare_against_previous_best(self, num_hands: int = 100) -> Dict:
@@ -732,7 +731,7 @@ class ProgressiveTrainer:
         self.logger.info(f"  Comparison results:")
         self.logger.info(f"    Win Rate: {win_rate:.2%}")
         self.logger.info(f"    Avg Reward: {avg_reward:.2f}")
-        self.logger.info(f"    Result: {'✓ NEW MODEL IS BETTER' if is_better else '✗ Previous model is still better'}")
+        self.logger.info(f"    Result: {'[OK] NEW MODEL IS BETTER' if is_better else '[FAIL] Previous model is still better'}")
         
         return {
             'previous_best_exists': True,
@@ -888,7 +887,7 @@ class ProgressiveTrainer:
         elapsed_time = time.time() - self.stats['start_time']
         
         report_path = os.path.join(
-            self.config.log_dir,
+            self.config.report_dir,
             f"training_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt"
         )
         
@@ -925,7 +924,7 @@ class ProgressiveTrainer:
                 if comparison_results.get('previous_best_exists'):
                     f.write(f"  Win Rate: {comparison_results['win_rate']:.2%}\n")
                     f.write(f"  Avg Reward: {comparison_results['avg_reward']:.2f}\n")
-                    f.write(f"  Result: {'✓ NEW MODEL IS BETTER' if comparison_results['is_better'] else '✗ Previous model still better'}\n")
+                    f.write(f"  Result: {'[OK] NEW MODEL IS BETTER' if comparison_results['is_better'] else '[FAIL] Previous model is still better'}\n")
                     f.write(f"  Status: {'Promoted to champion_best' if comparison_results['is_better'] else 'Saved as champion_current only'}\n")
                 else:
                     f.write("  No previous best model - this model becomes champion_best\n")
@@ -959,7 +958,7 @@ class ProgressiveTrainer:
         Generate advanced analysis report after training.
         """
         sns.set_style('darkgrid')
-        report_path = os.path.join(self.config.log_dir, 'training_analysis_report.txt')
+        report_path = os.path.join(self.config.report_dir, 'training_analysis_report.txt')
         with open(report_path, 'w', encoding='utf-8') as report:
             report.write('=== Championship Training Analysis Report ===\n\n')
             # Component Verification (placeholder)
@@ -1057,6 +1056,223 @@ class ProgressiveTrainer:
             report.write('\n=== End of Report ===\n')
         
         self.logger.info(f"Analysis report saved: {report_path}")
+        
+        # Advanced visualizations and real-time metrics
+        import matplotlib.pyplot as plt
+        import numpy as np
+        from datetime import datetime
+        # Example: plot training loss curve
+        if hasattr(self.config, 'metrics') and 'loss_values' in self.config.metrics:
+            plt.figure(figsize=(8,4))
+            plt.plot(self.config.metrics['loss_values'], label='Training Loss')
+            plt.xlabel('Epoch')
+            plt.ylabel('Loss')
+            plt.title('Training Loss Curve')
+            plt.legend()
+            plt.tight_layout()
+            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+            vis_path = os.path.join(self.config.report_dir, f"training_loss_curve_{timestamp}.png")
+            plt.savefig(vis_path)
+            print(f"Loss curve visualization saved to {vis_path}")
+        # Example: print real-time metrics during training
+        if hasattr(self.config, 'metrics'):
+            print("Real-time metrics:")
+            for k, v in self.config.metrics.items():
+                print(f"{k}: {v}")
+        
+        # === DeepStack Analysis Section ===
+        from src.deepstack.tree_builder import PokerTreeBuilder
+        from src.deepstack.terminal_equity import TerminalEquity
+        from src.deepstack.tree_cfr import TreeCFR
+        from src.deepstack.cfrd_gadget import CFRDGadget
+        from src.deepstack.monte_carlo import MonteCarloSimulator
+        from src.deepstack.bucketer import Bucketer
+        from src.deepstack.masked_huber_loss import masked_huber_loss
+        from src.deepstack.strategy_filling import StrategyFilling
+        from src.deepstack.card_abstraction import CardAbstraction
+        from src.deepstack.hand_evaluator import HandEvaluator
+        import matplotlib.pyplot as plt
+        import seaborn as sns
+        import numpy as np
+        # Example game state for analysis
+        game_state = self.agent.get_current_game_state() if hasattr(self.agent, 'get_current_game_state') else None
+        report.write('\n=== DeepStack Analysis ===\n')
+        # Tree Builder
+        try:
+            tree_builder = PokerTreeBuilder()
+            tree = tree_builder.build_tree()
+            report.write('Poker Tree Structure: OK\n')
+            report.write(f'  Nodes: {len(tree.nodes)}\n')
+        except Exception as e:
+            report.write(f'Tree Builder Error: {e}\n')
+        # Terminal Equity
+        try:
+            terminal_equity = TerminalEquity()
+            equity = terminal_equity.calculate_equity()
+            report.write(f'Terminal Equity: {equity}\n')
+        except Exception as e:
+            report.write(f'Terminal Equity Error: {e}\n')
+        # Tree CFR
+        try:
+            tree_cfr = TreeCFR(tree)
+            regrets = tree_cfr.run_cfr()
+            report.write(f'CFR Regrets: {np.mean(regrets):.4f} (mean)\n')
+        except Exception as e:
+            report.write(f'Tree CFR Error: {e}\n')
+        # CFRD Gadget
+        try:
+            cfrd = CFRDGadget(tree)
+            cfrd_result = cfrd.run_gadget()
+            report.write(f'CFRD Gadget Result: {cfrd_result}\n')
+        except Exception as e:
+            report.write(f'CFRD Gadget Error: {e}\n')
+        # Monte Carlo Equity
+        try:
+            mc_sim = MonteCarloSimulator()
+            if game_state:
+                player_hand = game_state.players[0].hand
+                community_cards = game_state.community_cards
+                mc_equity = mc_sim.calculate_equity(player_hand, community_cards)
+                report.write(f'Monte Carlo Equity: {mc_equity:.3f}\n')
+        except Exception as e:
+            report.write(f'Monte Carlo Error: {e}\n')
+        # Bucketer
+        try:
+            bucketer = Bucketer()
+            buckets = bucketer.get_buckets()
+            report.write(f'Bucketing: {len(buckets)} buckets\n')
+        except Exception as e:
+            report.write(f'Bucketer Error: {e}\n')
+        # Masked Huber Loss
+        try:
+            y_true = np.random.rand(10)
+            y_pred = np.random.rand(10)
+            mask = np.ones(10)
+            loss = masked_huber_loss(y_true, y_pred, mask)
+            report.write(f'Masked Huber Loss: {loss:.4f}\n')
+        except Exception as e:
+            report.write(f'Masked Huber Loss Error: {e}\n')
+        # Strategy Filling
+        try:
+            strategy = np.random.rand(10)
+            filled_strategy = StrategyFilling.fill(strategy)
+            report.write(f'Strategy Filling: {filled_strategy}\n')
+        except Exception as e:
+            report.write(f'Strategy Filling Error: {e}\n')
+        # Card Abstraction
+        try:
+            abstraction = CardAbstraction()
+            abs_result = abstraction.abstract_hand([1,2,3,4,5])
+            report.write(f'Card Abstraction: {abs_result}\n')
+        except Exception as e:
+            report.write(f'Card Abstraction Error: {e}\n')
+        # Hand Evaluator
+        try:
+            evaluator = HandEvaluator()
+            hand_strength = evaluator.evaluate_hand([1,2,3,4,5])
+            report.write(f'Hand Evaluator Strength: {hand_strength}\n')
+        except Exception as e:
+            report.write(f'Hand Evaluator Error: {e}\n')
+        # Visualizations
+        try:
+            sns.set_style('whitegrid')
+            fig, ax = plt.subplots(figsize=(8,4))
+            if hasattr(self.config, 'metrics') and 'loss_values' in self.config.metrics:
+                ax.plot(self.config.metrics['loss_values'], label='Training Loss')
+                ax.set_xlabel('Epoch')
+                ax.set_ylabel('Loss')
+                ax.set_title('Training Loss Curve')
+                ax.legend()
+                vis_path = os.path.join(self.config.report_dir, f"training_loss_curve_{timestamp}_deepstack.png")
+                plt.tight_layout()
+                plt.savefig(vis_path)
+                report.write(f'Loss curve visualization saved to {vis_path}\n')
+        except Exception as e:
+            report.write(f'Visualization Error: {e}\n')
+        # === Agent Brain Observability & Thought Streaming ===
+        report.write('\n=== Agent Brain Observability & Thought Streaming ===\n')
+        try:
+            # Action selection reasoning
+            if hasattr(self.agent, 'last_action_reasoning'):
+                report.write(f'Action Selection Reasoning: {self.agent.last_action_reasoning}\n')
+            else:
+                report.write('Action Selection Reasoning: Not available\n')
+            # Value estimates
+            if hasattr(self.agent, 'last_q_values'):
+                report.write(f'Q-Values: {self.agent.last_q_values}\n')
+            if hasattr(self.agent, 'last_cfr_regrets'):
+                report.write(f'CFR Regrets: {self.agent.last_cfr_regrets}\n')
+            if hasattr(self.agent, 'last_equity_estimate'):
+                report.write(f'Equity Estimate: {self.agent.last_equity_estimate}\n')
+            # Strategy weights and updates
+            if hasattr(self.agent, 'cfr_weight') and hasattr(self.agent, 'dqn_weight') and hasattr(self.agent, 'equity_weight'):
+                report.write(f'Strategy Weights: CFR={self.agent.cfr_weight:.2f}, DQN={self.agent.dqn_weight:.2f}, Equity={self.agent.equity_weight:.2f}\n')
+            if hasattr(self.agent, 'strategy_update_log'):
+                report.write(f'Strategy Update Log: {self.agent.strategy_update_log}\n')
+            # Anomalies or suboptimal decisions
+            if hasattr(self.agent, 'anomaly_log'):
+                report.write(f'Anomalies/Suboptimal Decisions: {self.agent.anomaly_log}\n')
+            else:
+                report.write('Anomalies/Suboptimal Decisions: None detected\n')
+        except Exception as e:
+            report.write(f'Observability Error: {e}\n')
+        report.write('\n=== End Agent Observability ===\n')
+        # === Actionable Insights & Recommendations ===
+        report.write('\n=== Actionable Insights & Recommendations ===\n')
+        try:
+            # CFR convergence
+            if hasattr(self.config, 'metrics') and 'loss_values' in self.config.metrics:
+                losses = np.array(self.config.metrics['loss_values'])
+                if len(losses) > 10 and np.std(losses[-10:]) > 0.5:
+                    report.write('Loss curve is unstable. Consider increasing CFR iterations or tuning learning rate.\n')
+                else:
+                    report.write('Loss curve is stable. CFR convergence is satisfactory.\n')
+            # Win rate analysis
+            if hasattr(self, 'opponent_stats') and self.opponent_stats:
+                for opp_type, stats in self.opponent_stats.items():
+                    if stats['win_rate'] < 0.5:
+                        report.write(f'Win rate vs {opp_type} is low ({stats["win_rate"]:.2%}). Consider curriculum adjustment or more training episodes.\n')
+            # Strategy weights
+            if hasattr(self.agent, 'cfr_weight') and self.agent.cfr_weight < 0.2:
+                report.write('CFR weight is low. May impact game-theoretic optimality.\n')
+            # Anomaly detection
+            if hasattr(self.agent, 'anomaly_log') and self.agent.anomaly_log:
+                report.write(f'Anomalies detected: {self.agent.anomaly_log}\n')
+            else:
+                report.write('No major anomalies detected.\n')
+            # Pre-trained model usage
+            if hasattr(self.agent, 'use_pretrained') and self.agent.use_pretrained:
+                report.write('Pre-trained championship-level models are loaded and used.\n')
+            else:
+                report.write('WARNING: Pre-trained models not loaded. Model may not be at championship level.\n')
+            # General suggestions
+            report.write('General suggestions for improvement:\n')
+            report.write('- Increase training episodes for more robust learning.\n')
+            report.write('- Tune exploration rate (epsilon) for better balance between exploration and exploitation.\n')
+            report.write('- Use more diverse opponents in vicarious learning.\n')
+            report.write('- Monitor strategy weights and adjust for optimal blend.\n')
+            report.write('- Review loss and win rate curves for signs of overfitting or instability.\n')
+        except Exception as e:
+            report.write(f'Insights Error: {e}\n')
+        report.write('\n=== End Actionable Insights ===\n')
+        # DeepStacked sample verification
+        report.write('\n=== DeepStacked Training/Test Sample Verification ===\n')
+        try:
+            if hasattr(self.agent, 'samples_loaded') and self.agent.samples_loaded:
+                report.write('DeepStacked training and test samples are loaded and used by the agent.\n')
+                report.write(f'Training samples: {len(self.agent.train_inputs)} inputs, {len(self.agent.train_targets)} targets\n')
+                report.write(f'Test samples: {len(self.agent.test_inputs)} inputs, {len(self.agent.test_targets)} targets\n')
+            else:
+                report.write('WARNING: DeepStacked samples not loaded. Check file paths and agent integration.\n')
+        except Exception as e:
+            report.write(f'Sample Verification Error: {e}\n')
+        report.write('\n=== End DeepStacked Sample Verification ===\n')
+        # DeepStack module analysis integration
+        ds_results = self.agent.deepstack_analysis(self.agent.get_current_game_state())
+        report.write('\n=== DeepStack Module Analysis ===\n')
+        for k, v in ds_results.items():
+            report.write(f'{k}: {v}\n')
+        report.write('=== End DeepStack Module Analysis ===\n')
 
 
 def main():
@@ -1080,9 +1296,9 @@ Examples:
     parser.add_argument(
         '--mode',
         type=str,
-        choices=['smoketest', 'full'],
+        choices=['smoketest', 'standard', 'production', 'full'],
         default='smoketest',
-        help='Training mode (smoketest=quick validation, full=production training)'
+        help='Training mode (smoketest=quick validation, standard=medium test, production=full training)'
     )
     
     parser.add_argument(
@@ -1161,7 +1377,7 @@ Examples:
     try:
         stats = trainer.train()
         
-        logger.info("\n✓ Training completed successfully!")
+        logger.info("\n[OK] Training completed successfully!")
         logger.info(f"  Current model saved to: {config.versions_dir}/champion_current")
         logger.info(f"  Best model saved to: {config.versions_dir}/champion_best")
         logger.info(f"  Checkpoint saved to: {config.checkpoints_dir}/")

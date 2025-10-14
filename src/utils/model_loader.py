@@ -236,17 +236,17 @@ def initialize_champion_models() -> Tuple[ModelLoader, TrainingDataManager]:
     
     print(f"\nAvailable Pre-trained Models: {len(available_models)}")
     for model in available_models:
-        print(f"  • {model['name']}: {model['size_mb']:.2f} MB")
+        print(f"  * {model['name']}: {model['size_mb']:.2f} MB")
     
     # Try to load DeepStack model
     try:
         deepstack_info = model_loader.load_deepstack_model(use_gpu=False)
-        print(f"\n✓ DeepStack Model Loaded:")
+        print(f"\n[OK] DeepStack Model Loaded:")
         print(f"  Type: {deepstack_info['model_type']}")
         print(f"  Size: {deepstack_info['size_mb']:.2f} MB")
         print(f"  Path: {deepstack_info['model_path']}")
     except FileNotFoundError as e:
-        print(f"\n⚠ DeepStack model not yet available: {e}")
+        print(f"\n[WARN] DeepStack model not yet available: {e}")
     
     # Load training data
     print("\n" + "="*60)
@@ -257,7 +257,7 @@ def initialize_champion_models() -> Tuple[ModelLoader, TrainingDataManager]:
     
     try:
         equity_data = data_manager.load_preflop_equity()
-        print(f"\n✓ Preflop Equity Table Loaded:")
+        print(f"\n[OK] Preflop Equity Table Loaded:")
         print(f"  Total hands: {len(equity_data)}")
         
         # Show top 10 hands
