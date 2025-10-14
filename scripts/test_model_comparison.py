@@ -18,28 +18,44 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')
 
 
 def test_model_file_structure():
-    """Test that models are saved with the expected file structure."""
-    models_dir = Path("models")
+    """Test that models are saved with the expected file structure in organized directories."""
+    versions_dir = Path("models/versions")
+    checkpoints_dir = Path("models/checkpoints")
     
-    print("TEST 1: Model File Structure")
+    print("TEST 1: Model File Structure (Organized Directories)")
     print("-" * 70)
     
-    # Expected files
-    expected_files = [
+    # Expected files in versions directory
+    expected_version_files = [
         "champion_current.cfr",
         "champion_current_metadata.json",
         "champion_best.cfr", 
-        "champion_best_metadata.json",
-        "champion_checkpoint_stage1.cfr",
-        "champion_checkpoint_stage1_metadata.json"
+        "champion_best_metadata.json"
+    ]
+    
+    # Expected files in checkpoints directory
+    expected_checkpoint_files = [
+        "champion_checkpoint.cfr",
+        "champion_checkpoint_metadata.json"
     ]
     
     all_exist = True
-    for filename in expected_files:
-        filepath = models_dir / filename
+    
+    print("\n  Versions directory (models/versions/):")
+    for filename in expected_version_files:
+        filepath = versions_dir / filename
         exists = filepath.exists()
         status = "✓" if exists else "✗"
-        print(f"  {status} {filename}: {'Found' if exists else 'Missing'}")
+        print(f"    {status} {filename}: {'Found' if exists else 'Missing'}")
+        if not exists:
+            all_exist = False
+    
+    print("\n  Checkpoints directory (models/checkpoints/):")
+    for filename in expected_checkpoint_files:
+        filepath = checkpoints_dir / filename
+        exists = filepath.exists()
+        status = "✓" if exists else "✗"
+        print(f"    {status} {filename}: {'Found' if exists else 'Missing'}")
         if not exists:
             all_exist = False
     
@@ -52,14 +68,14 @@ def test_comparison_results():
     print("\nTEST 2: Comparison Results")
     print("-" * 70)
     
-    comparison_file = Path("models/champion_best_comparison.json")
+    comparison_file = Path("models/versions/champion_best_comparison.json")
     
     if not comparison_file.exists():
-        print("  ✗ champion_best_comparison.json not found")
+        print("  ✗ champion_best_comparison.json not found in models/versions/")
         print("\nResult: ✗ FAIL")
         return False
     
-    print("  ✓ champion_best_comparison.json exists")
+    print("  ✓ champion_best_comparison.json exists in models/versions/")
     
     # Read and validate structure
     with open(comparison_file) as f:
@@ -91,19 +107,19 @@ def test_metadata_consistency():
     print("\nTEST 3: Metadata Consistency")
     print("-" * 70)
     
-    models_dir = Path("models")
+    versions_dir = Path("models/versions")
     
     # Check current metadata
-    current_meta_file = models_dir / "champion_current_metadata.json"
-    best_meta_file = models_dir / "champion_best_metadata.json"
+    current_meta_file = versions_dir / "champion_current_metadata.json"
+    best_meta_file = versions_dir / "champion_best_metadata.json"
     
     if not current_meta_file.exists():
-        print("  ✗ champion_current_metadata.json not found")
+        print("  ✗ champion_current_metadata.json not found in models/versions/")
         print("\nResult: ✗ FAIL")
         return False
     
     if not best_meta_file.exists():
-        print("  ✗ champion_best_metadata.json not found")
+        print("  ✗ champion_best_metadata.json not found in models/versions/")
         print("\nResult: ✗ FAIL")
         return False
     
@@ -133,36 +149,33 @@ def test_metadata_consistency():
 
 
 def test_no_timestamped_files():
-    """Test that no timestamped model files were created."""
-    print("\nTEST 4: No Timestamped Files")
+    """Test that no timestamped model files were created and directories are clean."""
+    print("\nTEST 4: Clean Directory Structure")
     print("-" * 70)
     
-    models_dir = Path("models")
+    versions_dir = Path("models/versions")
+    checkpoints_dir = Path("models/checkpoints")
     
-    # Look for files with episode numbers (excluding stage checkpoints)
+    # Check that only expected files exist in versions
     timestamped_files = []
-    for f in models_dir.glob("champion_*.cfr"):
-        filename = f.name
-        # Exclude expected files
-        if filename not in [
-            "champion_current.cfr",
-            "champion_best.cfr",
-            "champion_checkpoint_stage1.cfr",
-            "champion_checkpoint_stage2.cfr", 
-            "champion_checkpoint_stage3.cfr"
-        ]:
-            # Check if it has episode numbers (e.g., _ep100, _episode_50)
-            if "_ep" in filename.lower() or "_episode" in filename.lower():
-                timestamped_files.append(filename)
+    if versions_dir.exists():
+        for f in versions_dir.glob("champion_*.cfr"):
+            filename = f.name
+            # Only expect champion_current and champion_best
+            if filename not in ["champion_current.cfr", "champion_best.cfr"]:
+                # Check if it has episode numbers (e.g., _ep100, _episode_50)
+                if "_ep" in filename.lower() or "_episode" in filename.lower():
+                    timestamped_files.append(filename)
     
     if timestamped_files:
-        print(f"  ✗ Found {len(timestamped_files)} unexpected timestamped files:")
+        print(f"  ✗ Found {len(timestamped_files)} unexpected timestamped files in versions/:")
         for f in timestamped_files:
             print(f"    - {f}")
         print("\nResult: ✗ FAIL")
         return False
     else:
-        print("  ✓ No unexpected timestamped files found")
+        print("  ✓ No unexpected timestamped files found in versions/")
+        print("  ✓ Clean directory structure maintained")
         print("\nResult: ✓ PASS")
         return True
 
