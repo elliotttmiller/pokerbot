@@ -3,6 +3,7 @@
 from .card import Card, Deck, Rank, Suit
 from .game_state import Action, BettingRound, GameState, Player
 from .hand_evaluator import HandEvaluator, HandRank
+from .monte_carlo import MonteCarloSimulator
 
 __all__ = [
     'Card',
@@ -15,4 +16,5 @@ __all__ = [
     'Player',
     'HandEvaluator',
     'HandRank',
+    'MonteCarloSimulator',
 ]
