@@ -106,7 +106,8 @@ def test_training_pipeline():
             return all_exist
         else:
             logger.error(f"  ✗ Training failed with exit code {result.returncode}")
-            logger.error(f"  Error output: {result.stderr[-500:]}")  # Last 500 chars
+            error_msg = result.stderr[-500:] if result.stderr else "No error output"
+            logger.error(f"  Error output: {error_msg}")
             return False
             
     except subprocess.TimeoutExpired:
@@ -168,7 +169,7 @@ def test_agent_decision_making():
         
         action, raise_amt = agent.choose_action(
             hole_cards, community_cards, pot,
-            current_bet, player_stack, current_bet
+            current_bet, player_stack, current_bet  # opponent_bet same as current_bet in simple case
         )
         
         logger.info("  ✓ Agent made decision successfully")

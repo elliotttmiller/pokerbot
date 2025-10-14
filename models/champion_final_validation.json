@@ -8,28 +8,28 @@
   },
   "baseline_performance": {
     "random": {
-      "wins": 7,
-      "losses": 18,
-      "win_rate": 0.28,
-      "avg_reward": 1.56
+      "wins": 15,
+      "losses": 10,
+      "win_rate": 0.6,
+      "avg_reward": 55.0
     },
     "fixed": {
-      "wins": 1,
-      "losses": 24,
-      "win_rate": 0.04,
-      "avg_reward": -84.6
+      "wins": 9,
+      "losses": 16,
+      "win_rate": 0.36,
+      "avg_reward": -53.28
     },
     "cfr": {
-      "wins": 10,
-      "losses": 15,
-      "win_rate": 0.4,
-      "avg_reward": 13.6
+      "wins": 11,
+      "losses": 14,
+      "win_rate": 0.44,
+      "avg_reward": 20.0
     },
     "untrained_champion": {
-      "wins": 17,
-      "losses": 8,
-      "win_rate": 0.68,
-      "avg_reward": 31.6
+      "wins": 9,
+      "losses": 16,
+      "win_rate": 0.36,
+      "avg_reward": 12.8
     }
   },
   "consistency": {
