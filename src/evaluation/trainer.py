@@ -6,7 +6,7 @@ from typing import List, Optional
 import numpy as np
 
 from ..agents import BaseAgent, DQNAgent
-from ..game import Action, GameState
+from ..game import Action, BettingRound, GameState
 
 
 class Trainer:
