@@ -1,0 +1,49 @@
+# Agent Runtime Configuration
+
+agent:
+  # Model settings
+  model_path: "models/champion.onnx"
+  device: "cpu"  # cpu for inference
+  
+  # Decision making
+  time_per_decision: 5.0  # seconds
+  use_exploitative_adjustment: true
+  gto_exploit_blend: 0.3  # 0.0 = pure GTO, 1.0 = pure exploit
+  
+  # Opponent modeling
+  opponent_model:
+    enabled: true
+    min_samples: 50  # Minimum hands before exploiting
+    confidence_threshold: 0.7
+    stats_tracked:
+      - "vpip"  # Voluntarily Put $ In Pot
+      - "pfr"   # Pre-Flop Raise
+      - "af"    # Aggression Factor
+      - "wtsd"  # Went To Showdown
+      - "cbet"  # Continuation Bet
+  
+  # Solver settings
+  use_realtime_solver: true
+  max_solver_iterations: 1000
+  solver_time_limit: 3.0  # seconds
+  
+  # Risk management
+  risk_tolerance: 0.5  # 0.0 = very conservative, 1.0 = very aggressive
+  bankroll_management: true
+  stop_loss: 50  # big blinds
+  
+  # Logging and analysis
+  log_decisions: true
+  log_level: "INFO"  # DEBUG, INFO, WARNING, ERROR
+  save_hand_history: true
+  hand_history_path: "data/hand_history.json"
+
+# Execution mode
+mode: "simulation"  # simulation or live
+
+# Live mode settings (for GUI interaction)
+live:
+  perception_method: "api"  # api, ocr, or hybrid
+  screen_region: null  # [x, y, width, height] or null for auto-detect
+  action_delay: 0.5  # seconds between actions
+  retry_attempts: 3

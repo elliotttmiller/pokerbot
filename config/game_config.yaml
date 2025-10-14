@@ -1,0 +1,29 @@
+# Game Configuration for No-Limit Texas Hold'em
+
+game:
+  variant: "NLHE"  # No-Limit Texas Hold'em
+  num_players: 2   # Headsup (2 players) for initial training
+  starting_stack: 100  # Big blinds
+  small_blind: 0.5
+  big_blind: 1.0
+  ante: 0.0
+
+# Betting structure
+betting:
+  min_raise_multiplier: 2.0  # Minimum raise is 2x the previous bet
+  max_bet_cap: null  # null for true no-limit, or set a cap
+
+# Training progression
+curriculum:
+  - stage: 1
+    streets: ["river"]
+    description: "Single street - river only"
+  - stage: 2
+    streets: ["turn", "river"]
+    description: "Two streets - turn and river"
+  - stage: 3
+    streets: ["flop", "turn", "river"]
+    description: "Three streets - no preflop"
+  - stage: 4
+    streets: ["preflop", "flop", "turn", "river"]
+    description: "Full game - all streets"

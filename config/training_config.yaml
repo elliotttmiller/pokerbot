@@ -1,0 +1,53 @@
+# Training Configuration
+
+training:
+  # Data generation settings
+  cfr_iterations: 10000
+  data_points_per_iteration: 1000
+  total_training_samples: 10000000
+  
+  # Neural network settings
+  network:
+    architecture: "mlp"  # mlp or transformer
+    hidden_dims: [512, 512, 512]
+    activation: "relu"
+    dropout: 0.1
+    use_batch_norm: true
+  
+  # Training hyperparameters
+  batch_size: 256
+  learning_rate: 0.001
+  lr_schedule: "cosine"  # constant, step, cosine
+  epochs: 100
+  gradient_clip: 1.0
+  weight_decay: 0.0001
+  
+  # Optimization
+  optimizer: "adam"
+  beta1: 0.9
+  beta2: 0.999
+  
+  # Evaluation and checkpointing
+  eval_frequency: 1000  # steps
+  save_frequency: 5000  # steps
+  keep_n_checkpoints: 5
+  early_stopping_patience: 10
+  
+  # Data management
+  replay_buffer_size: 1000000
+  prioritized_replay: true
+  priority_alpha: 0.6
+  priority_beta: 0.4
+  
+  # Device settings
+  device: "cuda"  # cuda, cpu, or auto
+  num_workers: 4
+  seed: 42
+
+# Model export settings
+export:
+  format: "onnx"
+  opset_version: 14
+  dynamic_axes: true
+  optimize: true
+  output_path: "models/champion.onnx"
