@@ -5,6 +5,20 @@ from src.agents import ChampionAgent, RandomAgent, FixedStrategyAgent
 from src.game import Action
 
 
+def format_cards(cards):
+    """Format a list of cards for display."""
+    return ' '.join(str(c) for c in cards)
+
+
+def print_action_result(agent_name, action, raise_amt):
+    """Print an agent's action with optional raise amount."""
+    print(f"{agent_name}: {action.name}", end="")
+    if raise_amt > 0:
+        print(f" ${raise_amt}")
+    else:
+        print()
+
+
 def play_sample_hand():
     """Play a sample hand with Champion Agent."""
     print("\n" + "="*70)
@@ -44,12 +58,9 @@ def play_sample_hand():
         player_stack=1000,
         opponent_bet=20
     )
-    print(f"{champion.name}: {action.name}", end="")
+    print_action_result(champion.name, action, raise_amt)
     if raise_amt > 0:
-        print(f" ${raise_amt}")
         pot += raise_amt
-    else:
-        print()
     
     # Opponent responds
     opp_action, opp_raise = opponent.choose_action(
@@ -60,19 +71,16 @@ def play_sample_hand():
         player_stack=1000,
         opponent_bet=raise_amt if action == Action.RAISE else 20
     )
-    print(f"{opponent.name}: {opp_action.name}", end="")
+    print_action_result(opponent.name, opp_action, opp_raise)
     if opp_raise > 0:
-        print(f" ${opp_raise}")
         pot += opp_raise
-    else:
-        print()
     
     print(f"\nPot after preflop: ${pot}")
     
     # Deal flop
     community_cards = deck.deal(3)
     print(f"\n--- FLOP ---")
-    print(f"Community: {' '.join(str(c) for c in community_cards)}")
+    print(f"Community: {format_cards(community_cards)}")
     print(f"Pot: ${pot}")
     
     # More betting...
@@ -84,16 +92,12 @@ def play_sample_hand():
         player_stack=900,
         opponent_bet=0
     )
-    print(f"{champion.name}: {action.name}", end="")
-    if raise_amt > 0:
-        print(f" ${raise_amt}")
-    else:
-        print()
+    print_action_result(champion.name, action, raise_amt)
     
     # Deal turn
     community_cards.append(deck.deal(1)[0])
     print(f"\n--- TURN ---")
-    print(f"Community: {' '.join(str(c) for c in community_cards)}")
+    print(f"Community: {format_cards(community_cards)}")
     
     action, raise_amt = champion.choose_action(
         hole_cards=champion_cards,
@@ -103,11 +107,7 @@ def play_sample_hand():
         player_stack=850,
         opponent_bet=0
     )
-    print(f"{champion.name}: {action.name}", end="")
-    if raise_amt > 0:
-        print(f" ${raise_amt}")
-    else:
-        print()
+    print_action_result(champion.name, action, raise_amt)
     
     print("\n" + "="*70)
     print("END OF SAMPLE HAND")
@@ -157,27 +157,15 @@ def compare_agents_head_to_head():
         hole_cards, community_cards, pot, current_bet, player_stack, opponent_bet
     )
     
-    print(f"Champion Agent: {c_action.name}", end="")
-    if c_raise > 0:
-        print(f" ${c_raise}")
-    else:
-        print()
+    print_action_result("Champion Agent", c_action, c_raise)
     print("  Strategy: CFR + DQN + Equity (40%/40%/20%)")
     print()
     
-    print(f"Random Agent: {r_action.name}", end="")
-    if r_raise > 0:
-        print(f" ${r_raise}")
-    else:
-        print()
+    print_action_result("Random Agent", r_action, r_raise)
     print("  Strategy: Random selection")
     print()
     
-    print(f"Fixed Agent: {f_action.name}", end="")
-    if f_raise > 0:
-        print(f" ${f_raise}")
-    else:
-        print()
+    print_action_result("Fixed Agent", f_action, f_raise)
     print("  Strategy: GTO-inspired with pot odds")
     print()
     

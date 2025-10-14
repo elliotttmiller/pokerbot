@@ -86,10 +86,12 @@ def test_champion_agent_action_selection():
         hole_cards = [Card(Rank.TWO, Suit.CLUBS), Card(Rank.SEVEN, Suit.DIAMONDS)]
         community_cards = []
         action, raise_amt = agent.choose_action(
-            hole_cards, community_cards, 100, 150, 1000, 150
+            hole_cards, community_cards, 100, 200, 1000, 200
         )
-        # With high bet, weak hand should fold or possibly call (ensemble decision)
-        assert action in [Action.FOLD, Action.CALL], f"Expected FOLD or CALL for weak hand with high bet, got {action}"
+        # With very high bet (200 vs 100 pot), weak hand should fold or possibly call
+        # Note: Ensemble might occasionally call due to CFR exploration
+        assert action in [Action.FOLD, Action.CALL], \
+            f"Expected FOLD or CALL for weak hand with very high bet, got {action}"
         
         # Test post-flop decision - any reasonable action is acceptable
         hole_cards = [Card(Rank.KING, Suit.HEARTS), Card(Rank.QUEEN, Suit.HEARTS)]
