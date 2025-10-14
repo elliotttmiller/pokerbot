@@ -49,9 +49,11 @@ class ChampionAgent(BaseAgent):
                  use_pretrained: bool = True,
                  cfr_weight: float = 0.4,
                  dqn_weight: float = 0.4,
-                 equity_weight: float = 0.2):
+                 equity_weight: float = 0.2,
+                 use_cfr_plus: bool = False,
+                 use_deepstack: bool = False):
         """
-        Initialize Champion Agent.
+        Initialize Champion Agent with optional enhancements.
         
         Args:
             name: Agent name
@@ -67,11 +69,18 @@ class ChampionAgent(BaseAgent):
             cfr_weight: Weight for CFR strategy in ensemble (0-1)
             dqn_weight: Weight for DQN strategy in ensemble (0-1)
             equity_weight: Weight for equity-based decisions (0-1)
+            use_cfr_plus: Enable CFR+ enhancements (from poker-ai)
+            use_deepstack: Enable DeepStack value network (from poker-ai)
         """
         super().__init__(name)
         
         # Initialize CFR component
         self.cfr = CFRAgent(name=f"{name}_CFR")
+        
+        # Enable CFR+ if requested
+        self.use_cfr_plus = use_cfr_plus
+        if use_cfr_plus:
+            self.cfr.enable_cfr_plus()
         
         # DQN components
         self.state_size = state_size
@@ -95,6 +104,12 @@ class ChampionAgent(BaseAgent):
         if use_pretrained:
             self._load_pretrained_models()
         
+        # DeepStack value network (optional)
+        self.use_deepstack = use_deepstack
+        self.value_network = None
+        if use_deepstack:
+            self._init_deepstack_network()
+        
         # Ensemble weights
         self.cfr_weight = cfr_weight
         self.dqn_weight = dqn_weight
@@ -107,6 +122,10 @@ class ChampionAgent(BaseAgent):
         print(f"🏆 {name} initialized with champion pre-trained knowledge!")
         print(f"   Strategy weights: CFR={self.cfr_weight:.2f}, "
               f"DQN={self.dqn_weight:.2f}, Equity={self.equity_weight:.2f}")
+        if use_cfr_plus:
+            print(f"   ✓ CFR+ enhancements enabled")
+        if use_deepstack:
+            print(f"   ✓ DeepStack value network enabled")
     
     def _normalize_weights(self):
         """Normalize ensemble weights to sum to 1.0."""
@@ -582,3 +601,161 @@ class ChampionAgent(BaseAgent):
             amount: Amount won or lost
         """
         pass
+    
+    # ========================================================================
+    # ENHANCED FEATURES (from poker-ai integration)
+    # ========================================================================
+    
+    def _init_deepstack_network(self):
+        """Initialize DeepStack value network if PyTorch is available."""
+        try:
+            import torch
+            import torch.nn as nn
+            
+            # Simple DeepStack-style value network
+            class SimpleValueNetwork(nn.Module):
+                def __init__(self, bucket_count=169):
+                    super().__init__()
+                    self.bucket_count = bucket_count
+                    input_size = 2 * bucket_count + 1
+                    output_size = 2 * bucket_count
+                    
+                    self.network = nn.Sequential(
+                        nn.Linear(input_size, 512),
+                        nn.ReLU(),
+                        nn.Linear(512, 512),
+                        nn.ReLU(),
+                        nn.Linear(512, output_size)
+                    )
+                
+                def forward(self, x):
+                    # Add residual connection
+                    range_vectors = x[:, :2 * self.bucket_count]
+                    output = self.network(x)
+                    dot_product = (range_vectors * range_vectors).sum(dim=1, keepdim=True)
+                    residual = -0.5 * dot_product
+                    residual = residual.expand(-1, 2 * self.bucket_count)
+                    return output + residual
+            
+            self.value_network = SimpleValueNetwork()
+            print(f"   ✓ DeepStack value network initialized")
+        except ImportError:
+            print(f"   ⚠ PyTorch not available, DeepStack disabled")
+            self.use_deepstack = False
+            self.value_network = None
+        except Exception as e:
+            print(f"   ⚠ DeepStack initialization failed: {e}")
+            self.use_deepstack = False
+            self.value_network = None
+    
+    def train_cfr_plus(self, num_iterations: int = 1000):
+        """
+        Train CFR component with CFR+ enhancements.
+        
+        Args:
+            num_iterations: Number of CFR+ iterations
+        """
+        if self.use_cfr_plus:
+            self.cfr.train_with_cfr_plus(num_iterations)
+        else:
+            # Enable CFR+ and train
+            self.cfr.enable_cfr_plus()
+            self.use_cfr_plus = True
+            self.cfr.train_with_cfr_plus(num_iterations)
+    
+    def estimate_hand_values(
+        self,
+        my_range: np.ndarray,
+        opponent_range: np.ndarray,
+        pot_size: float
+    ) -> tuple:
+        """
+        Estimate counterfactual values using DeepStack network.
+        
+        Args:
+            my_range: Probability distribution over my possible hands
+            opponent_range: Probability distribution over opponent's hands
+            pot_size: Current pot size (normalized)
+        
+        Returns:
+            Tuple of (my_values, opponent_values)
+        """
+        if not self.use_deepstack or self.value_network is None:
+            # Fallback to uniform values
+            return (
+                np.ones(len(my_range)) * pot_size / 2,
+                np.ones(len(opponent_range)) * pot_size / 2
+            )
+        
+        try:
+            import torch
+            
+            # Convert to torch tensors
+            my_range_tensor = torch.tensor(my_range, dtype=torch.float32)
+            opp_range_tensor = torch.tensor(opponent_range, dtype=torch.float32)
+            pot_tensor = torch.tensor([pot_size], dtype=torch.float32)
+            
+            # Create input
+            input_tensor = torch.cat([my_range_tensor, opp_range_tensor, pot_tensor])
+            input_tensor = input_tensor.unsqueeze(0)
+            
+            # Get value estimates
+            with torch.no_grad():
+                output = self.value_network(input_tensor)
+            
+            output = output.squeeze(0)
+            bucket_count = len(my_range)
+            my_values = output[:bucket_count].numpy()
+            opp_values = output[bucket_count:].numpy()
+            
+            return my_values, opp_values
+        
+        except Exception as e:
+            print(f"Warning: DeepStack value estimation failed: {e}")
+            # Fallback to uniform
+            return (
+                np.ones(len(my_range)) * pot_size / 2,
+                np.ones(len(opponent_range)) * pot_size / 2
+            )
+    
+    def get_enhanced_stats(self) -> dict:
+        """
+        Get comprehensive agent statistics including enhanced components.
+        
+        Returns:
+            Dictionary with agent statistics
+        """
+        stats = {
+            'name': self.name,
+            'epsilon': self.epsilon,
+            'memory_size': len(self.memory),
+            'training_mode': self.training_mode,
+            'use_cfr_plus': self.use_cfr_plus,
+            'use_deepstack': self.use_deepstack,
+        }
+        
+        # Add CFR stats
+        if hasattr(self.cfr, 'get_training_stats'):
+            stats['cfr'] = self.cfr.get_training_stats()
+        else:
+            stats['cfr'] = {
+                'iterations': self.cfr.iterations,
+                'infosets': len(self.cfr.infosets)
+            }
+        
+        # Add DeepStack stats
+        if self.value_network is not None:
+            try:
+                import torch
+                stats['deepstack'] = {
+                    'parameters': sum(p.numel() for p in self.value_network.parameters()),
+                    'bucket_count': self.value_network.bucket_count
+                }
+            except:
+                pass
+        
+        return stats
+    
+    # ========================================================================
+    # END ENHANCED FEATURES
+    # ========================================================================

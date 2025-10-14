@@ -8,8 +8,6 @@ from .fixed_strategy_agent import FixedStrategyAgent
 from .random_agent import RandomAgent
 from .advanced_cfr import AdvancedCFRAgent
 from .search_agent import SearchAgent
-from .cfr_plus_agent import CFRPlusAgent
-from .enhanced_champion_agent import EnhancedChampionAgent
 
 __all__ = [
     'BaseAgent',
@@ -20,6 +18,4 @@ __all__ = [
     'RandomAgent',
     'AdvancedCFRAgent',
     'SearchAgent',
-    'CFRPlusAgent',
-    'EnhancedChampionAgent',
 ]

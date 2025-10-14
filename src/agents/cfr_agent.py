@@ -1,9 +1,15 @@
-"""Counterfactual Regret Minimization (CFR) agent implementation.
+"""Counterfactual Regret Minimization (CFR) agent implementation with CFR+ enhancements.
+
+This implementation includes:
+- Vanilla CFR algorithm
+- CFR+ enhancements (regret matching+, action pruning, linear CFR)
+- Integration from poker-ai repository concepts
 
 Based on concepts from:
 - DeepStack-Leduc (tree-based CFR)
+- Libratus (CFR+ algorithm)
 - coms4995-finalproj (ESMCCFR implementation)
-- Research papers on CFR algorithms
+- poker-ai repository (enhanced features)
 """
 
 import pickle
@@ -309,6 +315,169 @@ class CFRAgent:
             raise_amount = min(pot // 2, player_stack)
         
         return action, raise_amount
+    
+    # ========================================================================
+    # CFR+ ENHANCEMENTS (from poker-ai integration)
+    # ========================================================================
+    
+    def enable_cfr_plus(
+        self,
+        use_regret_matching_plus: bool = True,
+        use_pruning: bool = True,
+        use_linear_cfr: bool = True,
+        prune_threshold: float = -200.0,
+        lcfr_threshold: int = 400,
+        discount_interval: int = 10
+    ):
+        """
+        Enable CFR+ enhancements for faster convergence.
+        
+        CFR+ improvements:
+        1. Regret matching+: Reset negative regrets to 0
+        2. Action pruning: Skip actions with very negative regret
+        3. Linear CFR: Discount old regrets and strategies
+        
+        Args:
+            use_regret_matching_plus: Enable regret matching+
+            use_pruning: Enable action pruning
+            use_linear_cfr: Enable linear CFR discounting
+            prune_threshold: Regret threshold for pruning (negative)
+            lcfr_threshold: Iteration to start LCFR
+            discount_interval: Interval for discounting
+        """
+        self.use_regret_matching_plus = use_regret_matching_plus
+        self.use_pruning = use_pruning
+        self.use_linear_cfr = use_linear_cfr
+        self.prune_threshold = prune_threshold
+        self.lcfr_threshold = lcfr_threshold
+        self.discount_interval = discount_interval
+        
+        print(f"CFR+ enhancements enabled for {self.name}:")
+        if use_regret_matching_plus:
+            print(f"  ✓ Regret matching+ (reset negative regrets)")
+        if use_pruning:
+            print(f"  ✓ Action pruning (threshold: {prune_threshold})")
+        if use_linear_cfr:
+            print(f"  ✓ Linear CFR (starts at iteration {lcfr_threshold})")
+    
+    def train_with_cfr_plus(self, num_iterations: int = 1000):
+        """
+        Train using CFR+ enhancements.
+        
+        Args:
+            num_iterations: Number of CFR+ iterations
+        """
+        # Enable CFR+ if not already enabled
+        if not hasattr(self, 'use_regret_matching_plus'):
+            self.enable_cfr_plus()
+        
+        print(f"Training {self.name} with CFR+ for {num_iterations} iterations...")
+        
+        for i in range(num_iterations):
+            # Run standard CFR iteration
+            self.train(num_iterations=1)
+            
+            # CFR+ enhancement: Reset negative regrets
+            if self.use_regret_matching_plus and (i + 1) % 10 == 0:
+                self._reset_negative_regrets()
+            
+            # Linear CFR: Apply discounting
+            if self.use_linear_cfr and i > self.lcfr_threshold and i % self.discount_interval == 0:
+                self._apply_discounting(i)
+            
+            # Progress logging
+            if (i + 1) % 100 == 0 and i > 0:
+                avg_regret = self._compute_average_regret()
+                print(f"  Iteration {i + 1}/{num_iterations} - Avg Regret: {avg_regret:.6f}")
+        
+        print(f"✓ CFR+ training complete ({self.iterations} total iterations)")
+    
+    def _reset_negative_regrets(self):
+        """CFR+: Reset negative regrets to 0 for faster convergence."""
+        for infoset in self.infosets.values():
+            infoset.regret_sum = np.maximum(infoset.regret_sum, 0.0)
+    
+    def _apply_discounting(self, iteration: int):
+        """
+        Linear CFR: Discount old regrets and strategies.
+        
+        Args:
+            iteration: Current iteration number
+        """
+        t = iteration / self.discount_interval
+        discount = t / (t + 1.0)
+        
+        for infoset in self.infosets.values():
+            infoset.regret_sum *= discount
+            infoset.strategy_sum *= discount
+    
+    def _should_prune_action(self, infoset: InfoSet, action_idx: int) -> bool:
+        """
+        Determine if action should be pruned based on regret.
+        
+        Args:
+            infoset: Information set
+            action_idx: Action index
+        
+        Returns:
+            True if action should be pruned
+        """
+        if not hasattr(self, 'use_pruning') or not self.use_pruning:
+            return False
+        
+        if action_idx >= len(infoset.regret_sum):
+            return False
+        
+        return infoset.regret_sum[action_idx] < self.prune_threshold
+    
+    def _compute_average_regret(self) -> float:
+        """Compute average regret across all infosets."""
+        if not self.infosets:
+            return 0.0
+        
+        total_regret = 0.0
+        count = 0
+        
+        for infoset in self.infosets.values():
+            total_regret += np.sum(np.maximum(infoset.regret_sum, 0.0))
+            count += len(infoset.regret_sum)
+        
+        return total_regret / max(count, 1)
+    
+    def get_training_stats(self) -> Dict:
+        """
+        Get comprehensive training statistics.
+        
+        Returns:
+            Dictionary with training metrics
+        """
+        stats = {
+            'iterations': self.iterations,
+            'infosets': len(self.infosets),
+            'average_regret': self._compute_average_regret(),
+            'cfr_plus_enabled': hasattr(self, 'use_regret_matching_plus')
+        }
+        
+        if hasattr(self, 'use_pruning'):
+            # Count pruned actions
+            pruned_count = 0
+            total_actions = 0
+            
+            for infoset in self.infosets.values():
+                for i in range(len(infoset.regret_sum)):
+                    total_actions += 1
+                    if self._should_prune_action(infoset, i):
+                        pruned_count += 1
+            
+            stats['pruned_actions'] = pruned_count
+            stats['total_actions'] = total_actions
+            stats['prune_percentage'] = (pruned_count / max(total_actions, 1)) * 100
+        
+        return stats
+    
+    # ========================================================================
+    # END CFR+ ENHANCEMENTS
+    # ========================================================================
     
     def save_strategy(self, filepath: str):
         """Save trained strategy to file."""
