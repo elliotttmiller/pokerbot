@@ -128,9 +128,14 @@ models/*.h5
 models/*.keras
 logs/
 data/*.csv
-data/*.json
+data/unified_training_data.json
 *.pkl
 *.pickle
+
+# Keep pre-trained models from champion projects
+!models/pretrained/*.model
+!models/pretrained/*.info
+!data/equity_tables/*.json
 
 # OS specific
 .DS_Store

@@ -34,10 +34,21 @@ class MonteCarloSimulator:
         self._load_preflop_equities()
     
     def _load_preflop_equities(self):
-        """Load preflop equity tables."""
-        # This would load from a JSON file - for now, use basic values
-        # In production, this should load from preflop_equity.json
-        self.preflop_equities = self._generate_basic_preflop_equities()
+        """Load preflop equity tables from champion projects."""
+        try:
+            # Try to load actual preflop equity data from dickreuter/Poker
+            equity_file = os.path.join('data', 'equity_tables', 'preflop_equity.json')
+            if os.path.exists(equity_file):
+                with open(equity_file, 'r') as f:
+                    self.preflop_equities = json.load(f)
+                    self.logger.info(f"Loaded {len(self.preflop_equities)} preflop equities from champion data")
+            else:
+                # Fallback to basic equities
+                self.preflop_equities = self._generate_basic_preflop_equities()
+                self.logger.warning("Using basic equity estimates. Download champion data for better accuracy.")
+        except Exception as e:
+            self.logger.warning(f"Could not load preflop equities: {e}. Using basic estimates.")
+            self.preflop_equities = self._generate_basic_preflop_equities()
     
     def _generate_basic_preflop_equities(self) -> dict:
         """Generate basic preflop equity estimates."""
