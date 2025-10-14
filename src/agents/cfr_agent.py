@@ -102,7 +102,7 @@ class CFRAgent:
     
     def get_infoset(self, infoset_key: str, actions: List[Action]) -> InfoSet:
         """
-        Get or create information set.
+        Get or create information set. Ensures action consistency.
         
         Args:
             infoset_key: String key identifying the infoset
@@ -111,7 +111,12 @@ class CFRAgent:
         Returns:
             InfoSet object
         """
-        if infoset_key not in self.infosets:
+        if infoset_key in self.infosets:
+            infoset = self.infosets[infoset_key]
+            # If actions mismatch, reinitialize infoset
+            if len(infoset.actions) != len(actions) or any(a != b for a, b in zip(infoset.actions, actions)):
+                self.infosets[infoset_key] = InfoSet(actions)
+        else:
             self.infosets[infoset_key] = InfoSet(actions)
         return self.infosets[infoset_key]
     

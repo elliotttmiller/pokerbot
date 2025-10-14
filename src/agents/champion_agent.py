@@ -15,6 +15,7 @@ from collections import deque
 from typing import Dict, List, Optional, Tuple
 
 import numpy as np
+import os
 
 from ..game import Action, Card, HandEvaluator
 from ..utils.model_loader import ModelLoader, TrainingDataManager
@@ -138,10 +139,12 @@ class ChampionAgent(BaseAgent):
     def _build_model(self):
         """Build the DQN neural network model."""
         try:
-            from tensorflow.keras.models import Sequential
-            from tensorflow.keras.layers import Dense, Input, Dropout
-            from tensorflow.keras.optimizers import Adam
-            
+            import tensorflow as tf
+            Sequential = tf.keras.models.Sequential
+            Dense = tf.keras.layers.Dense
+            Input = tf.keras.layers.Input
+            Dropout = tf.keras.layers.Dropout
+            Adam = tf.keras.optimizers.Adam
             # Enhanced architecture for champion agent
             model = Sequential()
             model.add(Input(shape=(self.state_size,)))
@@ -153,7 +156,6 @@ class ChampionAgent(BaseAgent):
             model.add(Dense(64, activation='relu'))
             model.add(Dense(self.action_size, activation='linear'))
             model.compile(loss='mse', optimizer=Adam(learning_rate=self.learning_rate))
-            
             self.model = model
         except ImportError:
             print("Warning: TensorFlow not available. Champion agent will use CFR + equity only.")
@@ -755,7 +757,65 @@ class ChampionAgent(BaseAgent):
                 pass
         
         return stats
-    
-    # ========================================================================
-    # END ENHANCED FEATURES
-    # ========================================================================
+
+def load_deepstack_train_samples(samples_dir='data/train_samples'):
+    def load_bin(file):
+        return np.fromfile(os.path.join(samples_dir, file), dtype=np.float32)
+    train_inputs = load_bin('train.inputs')
+    train_targets = load_bin('train.targets')
+    train_mask = load_bin('train.mask')
+    valid_inputs = load_bin('valid.inputs')
+    valid_targets = load_bin('valid.targets')
+    valid_mask = load_bin('valid.mask')
+    # Reshape as needed (example shapes, adjust as needed)
+    train_inputs = train_inputs.reshape(-1, 27)
+    train_targets = train_targets.reshape(-1, 13)
+    train_mask = train_mask.reshape(-1, 13)
+    valid_inputs = valid_inputs.reshape(-1, 27)
+    valid_targets = valid_targets.reshape(-1, 13)
+    valid_mask = valid_mask.reshape(-1, 13)
+    return {
+        'train': (train_inputs, train_targets, train_mask),
+        'valid': (valid_inputs, valid_targets, valid_mask)
+    }
+
+def train_value_network_on_deepstack_samples(value_network, samples, epochs=10, batch_size=64):
+    train_inputs, train_targets, train_mask = samples['train']
+    valid_inputs, valid_targets, valid_mask = samples['valid']
+    history = value_network.fit(
+        train_inputs, train_targets,
+        validation_data=(valid_inputs, valid_targets),
+        epochs=epochs, batch_size=batch_size, verbose=2
+    )
+    return history
+
+def generate_deepstack_training_data(train_data_count, valid_data_count, output_dir):
+    """
+    Adapter for DeepStack data generation (placeholder).
+    Generates training/validation files with random poker situations and counterfactual values.
+    Output files: train.inputs, train.targets, train.mask, valid.inputs, valid.targets, valid.mask
+    """
+    import numpy as np
+    import os
+    os.makedirs(output_dir, exist_ok=True)
+    # Example shapes (adjust as needed for your NN):
+    input_shape = (27,)   # Example: 27 features per input
+    target_shape = (13,)  # Example: 13 targets per sample
+    mask_shape = (13,)    # Example: 13 mask values per sample
+    def save_bin(filename, arr):
+        arr.astype(np.float32).tofile(os.path.join(output_dir, filename))
+    # Training set
+    train_inputs = np.random.rand(train_data_count, *input_shape)
+    train_targets = np.random.rand(train_data_count, *target_shape)
+    train_mask = np.random.randint(0, 2, size=(train_data_count, *mask_shape))
+    save_bin('train.inputs', train_inputs)
+    save_bin('train.targets', train_targets)
+    save_bin('train.mask', train_mask)
+    # Validation set
+    valid_inputs = np.random.rand(valid_data_count, *input_shape)
+    valid_targets = np.random.rand(valid_data_count, *target_shape)
+    valid_mask = np.random.randint(0, 2, size=(valid_data_count, *mask_shape))
+    save_bin('valid.inputs', valid_inputs)
+    save_bin('valid.targets', valid_targets)
+    save_bin('valid.mask', valid_mask)
+    print(f"✓ DeepStack training/validation data generated in {output_dir}")
