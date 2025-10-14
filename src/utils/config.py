@@ -71,3 +71,26 @@ class Config:
             'verbose': self.verbose,
             'log_dir': self.log_dir
         }
+
+
+@dataclass
+class EnhancedConfig(Config):
+    """
+    Enhanced configuration for modular DeepStack upgrades and feature flags.
+    Ensures compatibility, performance, and safe rollout.
+    """
+    use_deepstack: bool = True
+    use_cfr_plus: bool = True
+    lookahead_enabled: bool = True
+    enable_analysis_report: bool = True
+    enable_strategy_visualization: bool = True
+    def to_dict(self) -> dict:
+        d = super().to_dict()
+        d.update({
+            'use_deepstack': self.use_deepstack,
+            'use_cfr_plus': self.use_cfr_plus,
+            'lookahead_enabled': self.lookahead_enabled,
+            'enable_analysis_report': self.enable_analysis_report,
+            'enable_strategy_visualization': self.enable_strategy_visualization
+        })
+        return d

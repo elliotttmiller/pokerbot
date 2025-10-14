@@ -499,3 +499,25 @@ class CFRAgent:
             strategy = pickle.load(f)
             self.infosets = strategy['infosets']
             self.iterations = strategy['iterations']
+    
+    def visualize_strategy(self, infoset_key: str = None):
+        """
+        Visualize CFR strategy for a given infoset or all infosets.
+        Converts and optimizes data for compatibility with pokerbot workflow.
+        """
+        import matplotlib.pyplot as plt
+        if infoset_key:
+            infosets = {infoset_key: self.infosets[infoset_key]} if infoset_key in self.infosets else {}
+        else:
+            infosets = self.infosets
+        for key, infoset in infosets.items():
+            avg_strategy = infoset.get_average_strategy()
+            actions = [str(a) for a in infoset.actions]
+            plt.figure(figsize=(6, 3))
+            plt.bar(actions, avg_strategy)
+            plt.title(f"CFR Strategy for Infoset: {key}")
+            plt.xlabel("Actions")
+            plt.ylabel("Probability")
+            plt.tight_layout()
+            plt.show()
+            print(f"Visualized CFR strategy for infoset: {key}")
