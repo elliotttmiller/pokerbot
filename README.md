@@ -1,30 +1,85 @@
 # Poker Bot - Advanced AI Poker Agent
 
-A comprehensive poker bot system with multiple AI agents, including Deep Q-Network (DQN), fixed strategy, and random agents. The system features vision-based game state detection, automated playing capabilities, and extensive evaluation tools.
+A comprehensive poker bot system with multiple AI agents, including advanced CFR with pruning, DQN, and unified champion agents. The system features vision-based game state detection, distributed training, and real-time search capabilities.
 
 ## Features
 
-- **Multiple AI Agents**:
-  - **🏆 Champion Agent**: Unified CFR + DQN hybrid with pre-trained models - our most advanced agent
-  - **DQN Agent**: Deep reinforcement learning agent using Q-learning
-  - **CFR Agent**: Counterfactual Regret Minimization for game-theoretic optimal play
-  - **Fixed Strategy Agent**: GTO-inspired fixed strategy with pot odds calculations
-  - **Random Agent**: Baseline random decision-making agent
+### 🏆 Advanced AI Agents
 
-- **Vision System**: 
-  - Automated game state detection using GPT-4 Vision
-  - Screen capture and control
-  - Automatic action execution
+- **Champion Agent**: Unified CFR + DQN hybrid with pre-trained models
+- **Search Agent**: Real-time depth-limited search with blueprint strategy
+- **Advanced CFR Agent**: CFR with pruning, linear discounting, and progressive training
+- **DQN Agent**: Deep reinforcement learning agent using Q-learning
+- **CFR Agent**: Counterfactual Regret Minimization for game-theoretic optimal play
+- **Fixed Strategy Agent**: GTO-inspired fixed strategy with pot odds calculations
+- **Random Agent**: Baseline random decision-making agent
 
-- **Training & Evaluation**:
-  - Comprehensive training framework for DQN agents
-  - Agent comparison and evaluation system
-  - Performance statistics and analytics
+### 🚀 Progressive Training Pipeline
 
-- **Game Engine**:
-  - Complete Texas Hold'em poker game implementation
-  - Hand evaluation and ranking
-  - Betting rounds and pot management
+- **Multi-phase CFR Training**: Warmup → Pruning → Linear CFR → Strategy updates
+- **Distributed Training**: Multiprocessing for 4-8x speedup
+- **Card Abstraction**: Information set clustering for memory efficiency
+- **Vicarious Learning**: Multi-agent training and imitation learning
+
+### 🎯 Advanced Features
+
+- **Blueprint + Real-time Search**: Two-stage decision making
+- **Information Set Abstraction**: Reduces 56B+ states to tractable sizes
+- **CFR with Pruning (CFRp)**: 20x+ speedup through action pruning
+- **Linear CFR**: Faster convergence via discounting
+- **Pre-trained Models**: DeepStack (50K+ epochs) and equity tables
+
+### 🎮 Vision System
+
+- Automated game state detection using GPT-4 Vision
+- Screen capture and control
+- Automatic action execution
+
+### 📊 Training & Evaluation
+
+- Comprehensive training framework
+- Distributed training with multiprocessing
+- Agent comparison and evaluation system
+- Performance statistics and analytics
+
+## Project Structure
+
+```
+pokerbot/
+├── src/                    # Source code
+│   ├── agents/            # AI agent implementations
+│   │   ├── champion_agent.py
+│   │   ├── search_agent.py
+│   │   ├── advanced_cfr.py
+│   │   ├── cfr_agent.py
+│   │   ├── dqn_agent.py
+│   │   └── ...
+│   ├── game/              # Game engine and utilities
+│   │   ├── card_abstraction.py
+│   │   ├── game_state.py
+│   │   ├── hand_evaluator.py
+│   │   └── ...
+│   ├── evaluation/        # Training and evaluation
+│   │   ├── distributed_trainer.py
+│   │   ├── trainer.py
+│   │   └── ...
+│   └── utils/             # Utility modules
+├── scripts/               # Executable scripts
+│   ├── train.py
+│   ├── play.py
+│   └── evaluate.py
+├── examples/              # Examples and demos
+│   ├── demo_champion.py
+│   ├── example_champion.py
+│   └── test_champion.py
+├── docs/                  # Documentation
+│   ├── CHAMPION_AGENT.md
+│   ├── PLURIBUS_ANALYSIS.md
+│   └── ...
+├── models/                # Saved models and pre-trained weights
+├── data/                  # Training data and equity tables
+└── README.md
+```
 
 ## Installation
 
@@ -48,6 +103,14 @@ source venv/bin/activate  # On Windows: venv\Scripts\activate
 ```
 
 3. Install dependencies:
+```bash
+pip install -r requirements.txt
+```
+
+4. Set up environment variables (optional):
+```bash
+export OPENAI_API_KEY=your_api_key_here
+```
 ```bash
 pip install -r requirements.txt
 ```
