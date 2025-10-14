@@ -1,0 +1,193 @@
+.
+├── data
+│   ├── deepstacked_training
+│   │   ├── test_samples
+│   │   │   ├── train.inputs
+│   │   │   ├── train.mask
+│   │   │   ├── train.targets
+│   │   │   ├── valid.inputs
+│   │   │   ├── valid.mask
+│   │   │   └── valid.targets
+│   │   └── train_samples
+│   │       ├── train.inputs
+│   │       ├── train.mask
+│   │       ├── train.targets
+│   │       ├── valid.inputs
+│   │       ├── valid.mask
+│   │       └── valid.targets
+│   ├── doc
+│   │   ├── classes
+│   │   │   ├── acpc_game.html
+│   │   │   ├── bet_sizing.html
+│   │   │   ├── bucket_conversion.html
+│   │   │   ├── bucketer.html
+│   │   │   ├── cfrd_gadget.html
+│   │   │   ├── continual_resolving.html
+│   │   │   ├── data_stream.html
+│   │   │   ├── lookahead.html
+│   │   │   ├── lookahead_builder.html
+│   │   │   ├── masked_huber_loss.html
+│   │   │   ├── mock_nn_terminal.html
+│   │   │   ├── mock_resolving.html
+│   │   │   ├── network_communication.html
+│   │   │   ├── next_round_value.html
+│   │   │   ├── protocol_to_node.html
+│   │   │   ├── range_generator.html
+│   │   │   ├── resolving.html
+│   │   │   ├── strategy_filling.html
+│   │   │   ├── terminal_equity.html
+│   │   │   ├── tree_builder.html
+│   │   │   ├── tree_cfr.html
+│   │   │   ├── tree_strategy_filling.html
+│   │   │   ├── tree_values.html
+│   │   │   ├── tree_visualiser.html
+│   │   │   └── value_nn.html
+│   │   ├── manual
+│   │   │   ├── internals.md
+│   │   │   ├── internals.md.html
+│   │   │   ├── lookahead_tree.png
+│   │   │   ├── tree1.png
+│   │   │   ├── tutorial.md
+│   │   │   └── tutorial.md.html
+│   │   ├── modules
+│   │   │   ├── arguments.html
+│   │   │   ├── card_to_string_conversion.html
+│   │   │   ├── card_tools.html
+│   │   │   ├── constants.html
+│   │   │   ├── data_generation.html
+│   │   │   ├── data_generation_call.html
+│   │   │   ├── evaluator.html
+│   │   │   ├── game_settings.html
+│   │   │   ├── net_builder.html
+│   │   │   ├── random_card_generator.html
+│   │   │   ├── tools.html
+│   │   │   └── train.html
+│   │   ├── scripts
+│   │   │   ├── cpu_gpu_model_converter.html
+│   │   │   ├── deepstack.html
+│   │   │   ├── main_data_generation.html
+│   │   │   └── main_train.html
+│   │   ├── config.ld
+│   │   ├── index.html
+│   │   └── ldoc.css
+│   ├── equity_tables
+│   │   ├── preflop_equity-50.json
+│   │   └── preflop_equity.json
+│   └── README.md
+├── docs
+│   ├── CHAMPION_AGENT.md
+│   ├── CHAMPION_IMPLEMENTATION.md
+│   ├── DEEPSTACK_GUIDE.md
+│   ├── ENHANCED_FEATURES.md
+│   ├── IMPLEMENTATION_COMPLETE.md
+│   ├── IMPLEMENTATION_SUMMARY_OLD.md
+│   ├── INTEGRATION_BLUEPRINT.md
+│   ├── MANUAL_TESTING_GUIDE.md
+│   ├── PLURIBUS_ANALYSIS.md
+│   ├── PROJECT_STATUS.md
+│   ├── QUICKSTART.md
+│   ├── TRAINING_GUIDE.md
+│   ├── TRAINING_IMPROVEMENTS_SUMMARY.md
+│   ├── TRAINING_MODEL_MANAGEMENT.md
+│   ├── TRAINING_PIPELINE_SUMMARY.md
+│   └── TRAINING_QUICKSTART.md
+├── examples
+│   ├── test.py
+│   └── test_champion.py
+├── models
+│   ├── checkpoints
+│   │   ├── champion_checkpoint.cfr
+│   │   ├── champion_checkpoint.keras
+│   │   └── champion_checkpoint_metadata.json
+│   ├── pretrained
+│   │   ├── final_cpu.info
+│   │   ├── final_cpu.model
+│   │   ├── final_gpu.info
+│   │   └── final_gpu.model
+│   ├── reports
+│   │   └── training_report_20251014_150934.txt
+│   ├── versions
+│   │   ├── champion_best.cfr
+│   │   ├── champion_best.keras
+│   │   ├── champion_best_comparison.json
+│   │   ├── champion_best_metadata.json
+│   │   ├── champion_current.cfr
+│   │   ├── champion_current.keras
+│   │   ├── champion_current_metadata.json
+│   │   └── champion_current_validation.json
+│   └── README.md
+├── scripts
+│   ├── config
+│   │   ├── production.json
+│   │   ├── smoketest.json
+│   │   └── standard.json
+│   ├── evaluate.py
+│   ├── monitor_resources.py
+│   ├── optimize_training.py
+│   ├── play.py
+│   ├── profile_performance.py
+│   ├── run_analysis_report.py
+│   ├── run_tests.py
+│   ├── test_model_comparison.py
+│   ├── test_training_pipeline.py
+│   ├── train.py
+│   ├── train_champion.py
+│   └── validate_training.py
+├── src
+│   ├── agents
+│   │   ├── __init__.py
+│   │   ├── advanced_cfr.py
+│   │   ├── base_agent.py
+│   │   ├── cfr_agent.py
+│   │   ├── champion_agent.py
+│   │   ├── deepstack_lookahead.py
+│   │   ├── dqn_agent.py
+│   │   ├── fixed_strategy_agent.py
+│   │   ├── random_agent.py
+│   │   └── search_agent.py
+│   ├── deepstack
+│   │   ├── arguments.py
+│   │   ├── bucketer.py
+│   │   ├── card_abstraction.py
+│   │   ├── cfrd_gadget.py
+│   │   ├── data_stream.py
+│   │   ├── deepstack_trainer.py
+│   │   ├── evaluator.py
+│   │   ├── hand_evaluator.py
+│   │   ├── masked_huber_loss.py
+│   │   ├── monte_carlo.py
+│   │   ├── net_builder.py
+│   │   ├── resolving.py
+│   │   ├── strategy_filling.py
+│   │   ├── terminal_equity.py
+│   │   ├── train_deepstack.py
+│   │   ├── tree_builder.py
+│   │   ├── tree_cfr.py
+│   │   └── value_nn.py
+│   ├── evaluation
+│   │   ├── __init__.py
+│   │   ├── distributed_trainer.py
+│   │   └── trainer.py
+│   ├── game
+│   │   ├── __init__.py
+│   │   ├── card.py
+│   │   └── game_state.py
+│   ├── utils
+│   │   ├── __init__.py
+│   │   ├── config.py
+│   │   ├── logger.py
+│   │   └── model_loader.py
+│   ├── vision
+│   │   ├── __init__.py
+│   │   ├── screen_controller.py
+│   │   └── vision_detector.py
+│   └── __init__.py
+├── tests
+│   └── test_deepstack_core.py
+├── DEEPSTACK_PORT_COMPLETION.md
+├── PORTING_BLUEPRINT.md
+├── PROJECT_TREE.txt
+├── README.md
+└── requirements.txt
+
+28 directories, 163 files
