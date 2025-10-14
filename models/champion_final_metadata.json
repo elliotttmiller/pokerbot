@@ -1,23 +1,23 @@
 {
-  "timestamp": "2025-10-14T12:54:08.583553",
+  "timestamp": "2025-10-14T12:56:19.176384",
   "total_episodes": 10,
   "total_hands": 10,
   "current_stage": 3,
   "epsilon": 0.0,
-  "memory_size": 544,
+  "memory_size": 522,
   "cfr_iterations": 10,
   "metrics": {
     "training_rewards": [
       30.0,
       -20,
-      0,
-      0,
-      40.0,
-      -69,
-      -190,
+      80.0,
       -20,
-      50.0,
-      -20
+      -20,
+      110.0,
+      30.0,
+      -20,
+      -40,
+      796.0
     ],
     "win_rates": [],
     "evaluation_scores": [],
@@ -29,26 +29,26 @@
       0.3,
       0.3,
       0.3,
-      0.2985,
-      0.2970075,
-      0.29552246249999997
+      0.3,
+      0.3,
+      0.2985
     ],
     "loss_values": [],
     "stage_transitions": [
       {
         "stage": 1,
         "episode": 0,
-        "timestamp": 0.0002505779266357422
+        "timestamp": 0.00027942657470703125
       },
       {
         "stage": 2,
         "episode": 0,
-        "timestamp": 0.02798748016357422
+        "timestamp": 0.02826666831970215
       },
       {
         "stage": 3,
         "episode": 5,
-        "timestamp": 0.5800361633300781
+        "timestamp": 0.5010497570037842
       }
     ]
   }
