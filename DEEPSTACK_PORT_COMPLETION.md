@@ -233,8 +233,8 @@ pokerbot/
     └── ...
 ```
 
-**Total New/Modified Lines**: ~2,500+ lines of production code  
-**Total Documentation**: ~1,500+ lines of guides and docs
+**Total New/Modified Lines**: ~2,900+ lines of production code  
+**Total Documentation**: ~1,100+ lines of guides and docs
 
 ---
 
@@ -383,22 +383,22 @@ The new DeepStack engine is production-ready and provides the foundation for wor
 ## Appendix: File Manifest
 
 ### Core Modules (src/deepstack/)
-1. tree_builder.py - 280 lines
-2. tree_cfr.py - 290 lines  
-3. terminal_equity.py - 195 lines
-4. cfrd_gadget.py - 150 lines
-5. value_nn.py - 250 lines
-6. resolving.py - 320 lines
+1. tree_builder.py - 309 lines
+2. tree_cfr.py - 311 lines  
+3. terminal_equity.py - 238 lines
+4. cfrd_gadget.py - 155 lines
+5. value_nn.py - 245 lines
+6. resolving.py - 285 lines
 
 ### Tests (tests/)
 1. test_deepstack_core.py - 255 lines
 
 ### Documentation (docs/ & root)
 1. PORTING_BLUEPRINT.md - 757 lines
-2. DEEPSTACK_GUIDE.md - 400 lines
+2. DEEPSTACK_GUIDE.md - 363 lines
 3. README.md - Updated with DeepStack info
 
-**Total Contribution**: ~2,897 lines of production code + tests + documentation
+**Total Contribution**: ~2,918 lines of production code + tests + documentation
 
 ---
 
