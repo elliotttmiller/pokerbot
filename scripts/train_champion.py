@@ -9,6 +9,17 @@ incorporating:
 - Self-play iteration
 - Continuous evaluation and checkpointing
 - Comprehensive metrics tracking
+- Automatic model comparison and promotion (new models only promoted if better)
+
+Model Management:
+- models/versions/champion_current: Latest trained model (overwritten each training session)
+- models/versions/champion_best: Best performing model (only updated when new model outperforms it)
+- models/checkpoints/: Single checkpoint per training run (overwrites previous)
+
+Pre-trained Models:
+- This agent ALWAYS starts with world-class pre-trained champion models (DeepStack)
+- Never starts from scratch - iterates and improves from champion-level baseline
+- Uses pre-trained equity tables and DeepStack value networks
 
 Usage:
     # Smoketest mode (quick validation)
@@ -18,7 +29,7 @@ Usage:
     python scripts/train_champion.py --mode full --episodes 10000
     
     # Resume from checkpoint
-    python scripts/train_champion.py --resume models/champion_checkpoint_500
+    python scripts/train_champion.py --resume models/versions/champion_best
 """
 
 import argparse
@@ -75,6 +86,8 @@ class TrainingConfig:
         
         # Shared settings
         self.model_dir = "models"
+        self.versions_dir = "models/versions"  # For current and best models
+        self.checkpoints_dir = "models/checkpoints"  # For training checkpoints
         self.log_dir = "logs"
         self.checkpoint_prefix = "champion_checkpoint"
         
@@ -120,6 +133,8 @@ class ProgressiveTrainer:
         
         # Create directories
         os.makedirs(config.model_dir, exist_ok=True)
+        os.makedirs(config.versions_dir, exist_ok=True)
+        os.makedirs(config.checkpoints_dir, exist_ok=True)
         os.makedirs(config.log_dir, exist_ok=True)
         
         # Initialize opponents for vicarious learning
@@ -201,11 +216,19 @@ class ProgressiveTrainer:
         self.logger.info("-"*70)
         final_results = self._final_evaluation()
         
-        # Save final model
+        # Save final model as champion_current
         self._save_checkpoint(final=True)
         
+        # Compare against previous best and promote if better
+        self.logger.info("\nMODEL COMPARISON & VALIDATION")
+        self.logger.info("-"*70)
+        comparison_results = self._compare_against_previous_best(
+            num_hands=self.config.validation_hands
+        )
+        self._promote_to_best_if_better(comparison_results)
+        
         # Generate training report
-        self._generate_training_report(final_results)
+        self._generate_training_report(final_results, comparison_results)
         
         return self.stats
     
@@ -227,7 +250,7 @@ class ProgressiveTrainer:
         self.logger.info(f"  Total CFR iterations: {self.agent.cfr.iterations}")
         self.logger.info(f"  Information sets learned: {len(self.agent.cfr.infosets)}")
         
-        # Save checkpoint
+        # Save checkpoint after stage 1
         self._save_checkpoint(stage=1)
     
     def _stage2_selfplay(self):
@@ -289,16 +312,12 @@ class ProgressiveTrainer:
                 
                 self.config.metrics['win_rates'].append(win_rate)
                 self.stats['stage_metrics']['stage2_win_rates'].append(win_rate)
-            
-            # Save checkpoint
-            if (episode + 1) % self.config.save_interval == 0:
-                self._save_checkpoint(stage=2, episode=episode + 1)
         
         final_win_rate = wins / num_episodes
         self.logger.info(f"✓ Self-play complete - Final win rate: {final_win_rate:.2%}")
     
     def _stage3_vicarious_learning(self):
-        """Stage 3: Vicarious learning from diverse opponents."""
+        """Stage 3: Enhanced vicarious learning from diverse opponents with adaptive curriculum."""
         self.stats['current_stage'] = 3
         self.config.metrics['stage_transitions'].append({
             'stage': 3,
@@ -309,17 +328,22 @@ class ProgressiveTrainer:
         num_episodes = self.config.stage3_vicarious_episodes
         self.logger.info(f"Vicarious learning for {num_episodes} episodes...")
         self.logger.info(f"Learning from opponent types: {', '.join(self.config.opponent_types)}")
+        self.logger.info("Using adaptive curriculum: prioritizing challenging opponents")
         
         # Track performance against each opponent type
-        opponent_stats = defaultdict(lambda: {'wins': 0, 'total': 0, 'rewards': []})
+        opponent_stats = defaultdict(lambda: {'wins': 0, 'total': 0, 'rewards': [], 'difficulty': 0.5})
         
         for episode in range(num_episodes):
-            # Rotate through different opponent types
-            opponent_type = self.config.opponent_types[episode % len(self.config.opponent_types)]
+            # Adaptive curriculum: prioritize opponents we're struggling against
+            # This ensures the agent learns from challenging situations
+            opponent_type = self._select_opponent_type_adaptive(opponent_stats, episode)
             
             # Skip if opponent type not available
             if opponent_type not in self.opponents or not self.opponents[opponent_type]:
-                continue
+                # Fallback to round-robin
+                opponent_type = self.config.opponent_types[episode % len(self.config.opponent_types)]
+                if opponent_type not in self.opponents or not self.opponents[opponent_type]:
+                    continue
             
             # Select random opponent of this type
             opponent = np.random.choice(self.opponents[opponent_type])
@@ -333,12 +357,19 @@ class ProgressiveTrainer:
             if won:
                 opponent_stats[opponent_type]['wins'] += 1
             
+            # Update difficulty estimate (lower win rate = higher difficulty)
+            if opponent_stats[opponent_type]['total'] > 0:
+                win_rate = opponent_stats[opponent_type]['wins'] / opponent_stats[opponent_type]['total']
+                opponent_stats[opponent_type]['difficulty'] = 1.0 - win_rate
+            
             self.stats['total_episodes'] += 1
             self.stats['total_hands_played'] += 1
             
-            # Train on experience
+            # Train on experience with enhanced replay
             if len(self.agent.memory) >= self.config.batch_size:
-                self.agent.replay(self.config.batch_size)
+                # Perform multiple training iterations for better learning
+                for _ in range(2):  # Double the training iterations
+                    self.agent.replay(self.config.batch_size)
             
             # Track metrics
             self.config.metrics['training_rewards'].append(reward)
@@ -356,12 +387,9 @@ class ProgressiveTrainer:
                         self.logger.info(
                             f"    vs {opp_type.upper()}: "
                             f"Win Rate {win_rate:.2%}, "
-                            f"Avg Reward {avg_reward:.2f}"
+                            f"Avg Reward {avg_reward:.2f}, "
+                            f"Difficulty {stats['difficulty']:.2f}"
                         )
-            
-            # Save checkpoint
-            if (episode + 1) % self.config.save_interval == 0:
-                self._save_checkpoint(stage=3, episode=episode + 1)
         
         # Final statistics
         self.logger.info("✓ Vicarious learning complete")
@@ -371,6 +399,48 @@ class ProgressiveTrainer:
                 win_rate = stats['wins'] / stats['total']
                 avg_reward = np.mean(stats['rewards'])
                 self.logger.info(f"    {opp_type.upper()}: {win_rate:.2%} win rate, {avg_reward:.2f} avg reward")
+    
+    def _select_opponent_type_adaptive(self, opponent_stats: Dict, episode: int) -> str:
+        """
+        Select opponent type using adaptive curriculum learning.
+        
+        Prioritizes:
+        1. Early episodes: Ensure all opponent types get initial samples
+        2. Later episodes: Focus on challenging opponents (lower win rates)
+        
+        Args:
+            opponent_stats: Dictionary of opponent performance statistics
+            episode: Current episode number
+            
+        Returns:
+            Selected opponent type
+        """
+        num_types = len(self.config.opponent_types)
+        
+        # First few episodes: round-robin to get initial data
+        if episode < num_types * 5:
+            return self.config.opponent_types[episode % num_types]
+        
+        # Calculate probabilities based on difficulty (focus on challenging opponents)
+        if opponent_stats:
+            difficulties = []
+            types = []
+            for opp_type in self.config.opponent_types:
+                if opp_type in opponent_stats and opponent_stats[opp_type]['total'] > 0:
+                    difficulties.append(opponent_stats[opp_type]['difficulty'])
+                    types.append(opp_type)
+            
+            if difficulties and types:
+                # Softmax to convert difficulties to probabilities
+                # Higher difficulty = higher probability of selection
+                difficulties = np.array(difficulties)
+                exp_diff = np.exp(difficulties * 3)  # Temperature factor
+                probs = exp_diff / np.sum(exp_diff)
+                
+                return np.random.choice(types, p=probs)
+        
+        # Fallback to round-robin
+        return self.config.opponent_types[episode % num_types]
     
     def _play_training_hand(self, opponent) -> Tuple[float, bool]:
         """
@@ -539,29 +609,227 @@ class ProgressiveTrainer:
         
         return results
     
+    def _promote_to_best_if_better(self, comparison_results: Dict):
+        """
+        Promote current model to best if it performs better than previous best.
+        
+        Args:
+            comparison_results: Results from _compare_against_previous_best
+        """
+        import shutil
+        
+        current_path = os.path.join(self.config.versions_dir, "champion_current")
+        best_path = os.path.join(self.config.versions_dir, "champion_best")
+        
+        if comparison_results['is_better']:
+            self.logger.info("✓ New model outperforms previous best - promoting to champion_best")
+            
+            # Copy current to best (preserving all files: .cfr, .keras, .h5, _metadata.json)
+            for ext in ['.cfr', '.keras', '.h5', '_metadata.json']:
+                src_file = f"{current_path}{ext}"
+                dst_file = f"{best_path}{ext}"
+                
+                if os.path.exists(src_file):
+                    shutil.copy2(src_file, dst_file)
+                    self.logger.info(f"  Copied: {src_file} -> {dst_file}")
+            
+            # Save comparison results
+            comparison_path = os.path.join(self.config.versions_dir, "champion_best_comparison.json")
+            with open(comparison_path, 'w') as f:
+                json.dump(comparison_results, f, indent=2)
+            
+            self.logger.info(f"  Model promotion complete!")
+        else:
+            self.logger.warning("✗ New model does not outperform previous best - keeping previous champion_best")
+            self.logger.info("  Current model saved as champion_current for analysis")
+    
+    def _compare_against_previous_best(self, num_hands: int = 100) -> Dict:
+        """
+        Compare current model against previous best model.
+        
+        Args:
+            num_hands: Number of hands to play for comparison
+            
+        Returns:
+            Comparison results dictionary with win_rate, avg_reward, and is_better flag
+        """
+        best_model_path = os.path.join(self.config.versions_dir, "champion_best")
+        
+        # Check if previous best model exists
+        if not os.path.exists(f"{best_model_path}.cfr"):
+            self.logger.info("No previous best model found - current model will become the best")
+            return {
+                'previous_best_exists': False,
+                'is_better': True,
+                'win_rate': None,
+                'avg_reward': None,
+                'total_hands': 0
+            }
+        
+        self.logger.info(f"Comparing current model vs previous best over {num_hands} hands...")
+        
+        # Load previous best model
+        try:
+            previous_best = ChampionAgent(name="PreviousBest", use_pretrained=True)
+            previous_best.load_strategy(best_model_path)
+        except Exception as e:
+            self.logger.warning(f"Failed to load previous best model: {e}")
+            return {
+                'previous_best_exists': False,
+                'is_better': True,
+                'error': str(e)
+            }
+        
+        # Set both agents to evaluation mode (no exploration)
+        original_epsilon = self.agent.epsilon
+        self.agent.set_training_mode(False)
+        previous_best.set_training_mode(False)
+        
+        # Play hands between current and previous best
+        wins = 0
+        total_reward = 0
+        
+        for _ in range(num_hands):
+            reward, won = self._play_comparison_hand(previous_best)
+            if won:
+                wins += 1
+            total_reward += reward
+        
+        # Restore training mode
+        self.agent.epsilon = original_epsilon
+        self.agent.set_training_mode(True)
+        
+        win_rate = wins / num_hands
+        avg_reward = total_reward / num_hands
+        
+        # Model is better if it wins more than 50% of hands
+        is_better = win_rate > 0.5
+        
+        self.logger.info(f"  Comparison results:")
+        self.logger.info(f"    Win Rate: {win_rate:.2%}")
+        self.logger.info(f"    Avg Reward: {avg_reward:.2f}")
+        self.logger.info(f"    Result: {'✓ NEW MODEL IS BETTER' if is_better else '✗ Previous model is still better'}")
+        
+        return {
+            'previous_best_exists': True,
+            'is_better': is_better,
+            'win_rate': win_rate,
+            'avg_reward': avg_reward,
+            'total_hands': num_hands
+        }
+    
+    def _play_comparison_hand(self, opponent) -> tuple:
+        """
+        Play a single hand for model comparison (similar to _play_training_hand but without learning).
+        
+        Args:
+            opponent: Opponent agent
+            
+        Returns:
+            Tuple of (reward, won)
+        """
+        # This is a simpler version of _play_training_hand without memory storage
+        game = GameState(
+            num_players=2,
+            small_blind=10,
+            big_blind=20,
+            starting_stack=1000
+        )
+        
+        agent_idx = 0
+        opponent_idx = 1
+        
+        done = False
+        
+        # Play through the hand
+        while not done:
+            if game.is_hand_complete():
+                done = True
+                break
+            
+            # Alternate between agent and opponent
+            for current_idx in [agent_idx, opponent_idx]:
+                player = game.players[current_idx]
+                
+                if player.folded or player.all_in:
+                    continue
+                
+                # Get action
+                hole_cards = player.hand
+                community_cards = game.community_cards
+                pot = game.pot
+                current_bet = game.current_bet - player.current_bet
+                player_stack = player.stack
+                
+                if current_idx == agent_idx:
+                    action, raise_amount = self.agent.choose_action(
+                        hole_cards, community_cards, pot,
+                        current_bet, player_stack, current_bet
+                    )
+                else:
+                    action, raise_amount = opponent.choose_action(
+                        hole_cards, community_cards, pot,
+                        current_bet, player_stack, current_bet
+                    )
+                
+                # Apply action
+                try:
+                    game.apply_action(current_idx, action, raise_amount)
+                except Exception:
+                    done = True
+                    break
+                
+                if game.is_hand_complete():
+                    done = True
+                    break
+            
+            # Check if betting round complete
+            if not done:
+                active_players = [p for p in game.players if not p.folded and not p.all_in]
+                if active_players:
+                    bets = [p.current_bet for p in active_players]
+                    if len(set(bets)) == 1:
+                        try:
+                            game.advance_betting_round()
+                        except Exception:
+                            done = True
+        
+        # Calculate reward
+        try:
+            winners = game.get_winners()
+            won = agent_idx in winners
+            
+            if won:
+                reward = game.pot / len(winners) if winners else 0
+            else:
+                reward = -game.players[agent_idx].current_bet
+        except Exception:
+            won = False
+            reward = -game.players[agent_idx].current_bet if game.players[agent_idx].current_bet > 0 else 0
+        
+        return reward, won
+    
     def _save_checkpoint(self, stage: int = None, episode: int = None, final: bool = False):
         """
-        Save training checkpoint.
+        Save training checkpoint with organized directory structure.
         
         Args:
             stage: Current training stage
-            episode: Current episode number
+            episode: Current episode number (now ignored to prevent file proliferation)
             final: Whether this is the final checkpoint
         """
         if final:
-            filepath = os.path.join(self.config.model_dir, "champion_final")
-        elif stage and episode:
-            filepath = os.path.join(
-                self.config.model_dir,
-                f"{self.config.checkpoint_prefix}_stage{stage}_ep{episode}"
-            )
+            # Save as champion_current in versions directory
+            filepath = os.path.join(self.config.versions_dir, "champion_current")
         elif stage:
+            # Save single checkpoint for entire run in checkpoints directory
+            # This checkpoint represents the overall training run state
             filepath = os.path.join(
-                self.config.model_dir,
-                f"{self.config.checkpoint_prefix}_stage{stage}"
+                self.config.checkpoints_dir,
+                f"{self.config.checkpoint_prefix}"
             )
         else:
-            filepath = os.path.join(self.config.model_dir, self.config.checkpoint_prefix)
+            filepath = os.path.join(self.config.checkpoints_dir, self.config.checkpoint_prefix)
         
         # Save agent strategy
         self.agent.save_strategy(filepath)
@@ -585,12 +853,13 @@ class ProgressiveTrainer:
         if self.verbose:
             self.logger.info(f"  Checkpoint saved: {filepath}")
     
-    def _generate_training_report(self, final_results: Dict):
+    def _generate_training_report(self, final_results: Dict, comparison_results: Dict = None):
         """
         Generate comprehensive training report.
         
         Args:
             final_results: Final evaluation results
+            comparison_results: Results from comparing against previous best model
         """
         elapsed_time = time.time() - self.stats['start_time']
         
@@ -626,6 +895,17 @@ class ProgressiveTrainer:
                 f.write(f"    Win Rate: {result['win_rate']:.2%}\n")
                 f.write(f"    Avg Reward: {result['avg_reward']:.2f}\n")
             
+            # Add comparison results if available
+            if comparison_results:
+                f.write("\nModel Comparison vs Previous Best:\n")
+                if comparison_results.get('previous_best_exists'):
+                    f.write(f"  Win Rate: {comparison_results['win_rate']:.2%}\n")
+                    f.write(f"  Avg Reward: {comparison_results['avg_reward']:.2f}\n")
+                    f.write(f"  Result: {'✓ NEW MODEL IS BETTER' if comparison_results['is_better'] else '✗ Previous model still better'}\n")
+                    f.write(f"  Status: {'Promoted to champion_best' if comparison_results['is_better'] else 'Saved as champion_current only'}\n")
+                else:
+                    f.write("  No previous best model - this model becomes champion_best\n")
+            
             f.write("\n" + "="*70 + "\n")
         
         self.logger.info(f"\nTraining report saved: {report_path}")
@@ -636,7 +916,11 @@ class ProgressiveTrainer:
         self.logger.info("="*70)
         self.logger.info(f"Total time: {elapsed_time/60:.2f} minutes")
         self.logger.info(f"Total episodes: {self.stats['total_episodes']}")
-        self.logger.info(f"Final model: models/champion_final")
+        if comparison_results and comparison_results.get('is_better'):
+            self.logger.info(f"Current model: models/champion_current (promoted to champion_best)")
+        else:
+            self.logger.info(f"Current model: models/champion_current")
+            self.logger.info(f"Best model: models/champion_best (unchanged)")
         self.logger.info("="*70)
 
 
@@ -717,16 +1001,18 @@ Examples:
     if args.model_dir:
         config.model_dir = args.model_dir
     
-    # Create or load agent
+    # Create or load agent - ALWAYS use pretrained models (never start from scratch)
     logger = Logger(verbose=args.verbose)
-    logger.info("Initializing Champion Agent...")
+    logger.info("Initializing Champion Agent with pre-trained models...")
+    logger.info("Note: This agent starts with world-class champion knowledge and iterates from there.")
     
     if args.resume:
         logger.info(f"Resuming from checkpoint: {args.resume}")
-        agent = ChampionAgent(name="Champion", use_pretrained=True)
+        agent = ChampionAgent(name="Champion", use_pretrained=True, use_deepstack=True)
         agent.load_strategy(args.resume)
     else:
-        agent = ChampionAgent(name="Champion", use_pretrained=True)
+        # Always start with pretrained champion models (DeepStack + equity tables)
+        agent = ChampionAgent(name="Champion", use_pretrained=True, use_deepstack=True)
     
     logger.info("Agent initialized successfully")
     logger.info(f"  State size: {agent.state_size}")
@@ -742,7 +1028,9 @@ Examples:
         stats = trainer.train()
         
         logger.info("\n✓ Training completed successfully!")
-        logger.info(f"  Final model saved to: {config.model_dir}/champion_final")
+        logger.info(f"  Current model saved to: {config.versions_dir}/champion_current")
+        logger.info(f"  Best model saved to: {config.versions_dir}/champion_best")
+        logger.info(f"  Checkpoint saved to: {config.checkpoints_dir}/")
         logger.info(f"  Training logs saved to: {config.log_dir}/")
         
         return 0
