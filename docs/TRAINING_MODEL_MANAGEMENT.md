@@ -55,7 +55,7 @@ After training completes, the new model is saved as `champion_current`, overwrit
 ### 3. Comparison Against Previous Best
 The pipeline automatically:
 - Loads the previous `champion_best` model (if it exists)
-- Plays 50-100 hands between `champion_current` and `champion_best`
+- Plays 50-200 hands between `champion_current` and `champion_best` (50 for smoketest, 200 for full mode)
 - Calculates win rate and average reward
 
 ### 4. Promotion Decision
@@ -84,7 +84,7 @@ No previous best model found - current model will become the best
 ```
 MODEL COMPARISON & VALIDATION
 ----------------------------------------------------------------------
-Comparing current model vs previous best over 50 hands...
+Comparing current model vs previous best over 200 hands...
   Comparison results:
     Win Rate: 62.00%
     Avg Reward: 15.30
@@ -97,7 +97,7 @@ Comparing current model vs previous best over 50 hands...
 ```
 MODEL COMPARISON & VALIDATION
 ----------------------------------------------------------------------
-Comparing current model vs previous best over 50 hands...
+Comparing current model vs previous best over 200 hands...
   Comparison results:
     Win Rate: 38.00%
     Avg Reward: -8.45

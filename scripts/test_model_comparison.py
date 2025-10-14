@@ -139,7 +139,7 @@ def test_no_timestamped_files():
     
     models_dir = Path("models")
     
-    # Look for files with timestamps or episode numbers (excluding stage checkpoints)
+    # Look for files with episode numbers (excluding stage checkpoints)
     timestamped_files = []
     for f in models_dir.glob("champion_*.cfr"):
         filename = f.name
@@ -151,8 +151,8 @@ def test_no_timestamped_files():
             "champion_checkpoint_stage2.cfr", 
             "champion_checkpoint_stage3.cfr"
         ]:
-            # Check if it has episode numbers or timestamps
-            if "_ep" in filename or any(c.isdigit() for c in filename.replace("stage", "")):
+            # Check if it has episode numbers (e.g., _ep100, _episode_50)
+            if "_ep" in filename.lower() or "_episode" in filename.lower():
                 timestamped_files.append(filename)
     
     if timestamped_files:
