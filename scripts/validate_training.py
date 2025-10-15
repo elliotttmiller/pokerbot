@@ -23,9 +23,9 @@ import numpy as np
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from src.agents import ChampionAgent, CFRAgent, FixedStrategyAgent, RandomAgent
-from src.evaluation import Evaluator
-from src.game import GameState
-from src.utils import Logger
+# from src.evaluation import Evaluator  # Commented out, module not found
+from src.deepstack.game import GameState
+from src.deepstack.utils import Logger
 
 
 class TrainingValidator:
@@ -273,10 +273,8 @@ class TrainingValidator:
     
     def _validate_consistency(self) -> Dict:
         """Test decision consistency."""
-        from src.game import Card, Rank, Suit
-        
+        from src.deepstack.game import Card, Rank, Suit
         self.logger.info("  Testing decision consistency with same game state...")
-        
         # Create a specific game scenario
         hole_cards = [Card(Rank.ACE, Suit.SPADES), Card(Rank.KING, Suit.HEARTS)]
         community_cards = [
@@ -287,7 +285,6 @@ class TrainingValidator:
         pot = 100
         current_bet = 20
         player_stack = 1000
-        
         # Get multiple decisions
         decisions = []
         for _ in range(10):
@@ -296,15 +293,12 @@ class TrainingValidator:
                 current_bet, player_stack, current_bet
             )
             decisions.append((action, raise_amt))
-        
         # Check consistency (with epsilon, may vary slightly)
         unique_actions = set([d[0] for d in decisions])
         consistency_score = 1.0 - (len(unique_actions) - 1) / len(decisions)
-        
         self.logger.info(f"    Unique actions: {len(unique_actions)}")
         self.logger.info(f"    Consistency score: {consistency_score:.2%}")
         self.logger.info(f"    Status: {'[OK]' if consistency_score > 0.5 else '[FAIL]'}")
-        
         return {
             'consistency_score': consistency_score,
             'unique_actions': len(unique_actions),

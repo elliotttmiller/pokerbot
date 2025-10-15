@@ -31,7 +31,8 @@ import torch.nn as nn
 import tensorflow as tf
 import pickle
 
-from ..game import Action, Card, GameState, HandEvaluator
+from src.deepstack.game import Action, Card, GameState
+from src.deepstack.utils.hand_evaluator import HandEvaluator
 from ..utils.model_loader import ModelLoader, TrainingDataManager
 from .base_agent import BaseAgent
 from src.deepstack.core.resolving import Resolving

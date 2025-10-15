@@ -4,7 +4,7 @@
 import sys
 
 from src.agents import ChampionAgent, CFRAgent, DQNAgent
-from src.game import Action, Card, Rank, Suit
+from src.deepstack.game import Action, Card, Rank, Suit
 
 
 def test_champion_agent_creation():

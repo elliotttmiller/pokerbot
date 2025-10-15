@@ -32,7 +32,12 @@ def main():
         cmd += ['--verbose']
     cmd += unknown
 
-    return subprocess.call(cmd)
+    # Ensure PYTHONPATH includes src for subprocess
+    env = os.environ.copy()
+    project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+    src_path = os.path.join(project_root, 'src')
+    env['PYTHONPATH'] = src_path + os.pathsep + env.get('PYTHONPATH', '')
+    return subprocess.call(cmd, env=env)
 
 
 if __name__ == '__main__':

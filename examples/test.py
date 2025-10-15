@@ -8,9 +8,9 @@ def test_imports():
     """Test all module imports."""
     print("Testing imports...")
     try:
-        from src.game import Card, Deck, HandEvaluator, GameState, Action
+        from src.deepstack.game import Card, Deck, HandEvaluator, GameState, Action
         from src.agents import RandomAgent, FixedStrategyAgent
-        from src.evaluation import Evaluator
+        from src.deepstack.evaluation import Evaluator
         from src.utils import Config, Logger
         print("✓ All imports successful\n")
         return True
@@ -23,25 +23,20 @@ def test_cards():
     """Test card system."""
     print("Testing card system...")
     try:
-        from src.game import Card, Rank, Suit, Deck
-        
+        from src.deepstack.game import Card, Rank, Suit, Deck
         # Test card creation
         card1 = Card(Rank.ACE, Suit.SPADES)
         assert str(card1) == "A♠", "Card string representation failed"
-        
         # Test card from string
         card2 = Card.from_string("K-H")
         assert card2.rank == Rank.KING, "Card parsing failed"
         assert card2.suit == Suit.HEARTS, "Card suit parsing failed"
-        
         # Test deck
         deck = Deck()
         assert len(deck) == 52, "Deck should have 52 cards"
-        
         dealt = deck.deal(5)
         assert len(dealt) == 5, "Should deal 5 cards"
         assert len(deck) == 47, "Deck should have 47 cards after dealing"
-        
         print("✓ Card system tests passed\n")
         return True
     except Exception as e:
@@ -53,8 +48,7 @@ def test_hand_evaluation():
     """Test hand evaluation."""
     print("Testing hand evaluation...")
     try:
-        from src.game import Card, Rank, Suit, HandEvaluator, HandRank
-        
+        from src.deepstack.game import Card, Rank, Suit, HandEvaluator, HandRank
         # Test royal flush
         royal_flush = [
             Card(Rank.ACE, Suit.SPADES),
@@ -65,7 +59,6 @@ def test_hand_evaluation():
         ]
         rank, _ = HandEvaluator.evaluate_hand(royal_flush)
         assert rank == HandRank.ROYAL_FLUSH, "Royal flush not detected"
-        
         # Test pair
         pair = [
             Card(Rank.ACE, Suit.SPADES),
@@ -76,7 +69,6 @@ def test_hand_evaluation():
         ]
         rank, _ = HandEvaluator.evaluate_hand(pair)
         assert rank == HandRank.ONE_PAIR, "Pair not detected"
-        
         # Test flush
         flush = [
             Card(Rank.ACE, Suit.HEARTS),
@@ -87,7 +79,6 @@ def test_hand_evaluation():
         ]
         rank, _ = HandEvaluator.evaluate_hand(flush)
         assert rank == HandRank.FLUSH, "Flush not detected"
-        
         print("✓ Hand evaluation tests passed\n")
         return True
     except Exception as e:
@@ -99,21 +90,17 @@ def test_game_state():
     """Test game state management."""
     print("Testing game state...")
     try:
-        from src.game import GameState, Action
-        
+        from src.deepstack.game import GameState, Action
         # Create game
         game = GameState(num_players=2, starting_stack=1000)
         game.reset()
-        
         assert len(game.players) == 2, "Should have 2 players"
         assert game.pot == 30, "Pot should be 30 after blinds"
         assert len(game.players[0].hand) == 2, "Player should have 2 cards"
         assert len(game.community_cards) == 0, "Should have no community cards initially"
-        
         # Test action
         success = game.apply_action(0, Action.CALL, 0)
         assert success, "Action should be successful"
-        
         print("✓ Game state tests passed\n")
         return True
     except Exception as e:
@@ -125,14 +112,11 @@ def test_agents():
     """Test poker agents."""
     print("Testing agents...")
     try:
-        from src.game import GameState
+        from src.deepstack.game import GameState
         from src.agents import RandomAgent, FixedStrategyAgent
-        
         game = GameState(num_players=2)
         game.reset()
-        
         player = game.players[0]
-        
         # Test random agent
         random_agent = RandomAgent()
         action, raise_amount = random_agent.choose_action(
@@ -144,7 +128,6 @@ def test_agents():
             opponent_bet=game.current_bet
         )
         assert action is not None, "Random agent should return an action"
-        
         # Test fixed strategy agent
         fixed_agent = FixedStrategyAgent()
         action, raise_amount = fixed_agent.choose_action(
@@ -156,7 +139,6 @@ def test_agents():
             opponent_bet=game.current_bet
         )
         assert action is not None, "Fixed agent should return an action"
-        
         print("✓ Agent tests passed\n")
         return True
     except Exception as e:
@@ -169,27 +151,21 @@ def test_evaluator():
     print("Testing evaluator...")
     try:
         from src.agents import RandomAgent, FixedStrategyAgent
-        from src.evaluation import Evaluator
-        
+        from src.deepstack.evaluation import Evaluator
         # Create agents
         random_agent = RandomAgent()
         fixed_agent = FixedStrategyAgent()
-        
         # Create evaluator
         evaluator = Evaluator([random_agent, fixed_agent])
-        
         # Run evaluation
         results = evaluator.evaluate_agents(num_hands=5, verbose=False)
-        
         assert 'wins' in results, "Results should have wins"
         assert 'losses' in results, "Results should have losses"
         assert 'ties' in results, "Results should have ties"
-        
         total_outcomes = (results['wins']['RandomAgent'] + 
                          results['wins']['FixedStrategy'] + 
                          results['ties'])
         assert total_outcomes == 5, "Should have 5 total outcomes"
-        
         print("✓ Evaluator tests passed\n")
         return True
     except Exception as e:
@@ -202,15 +178,12 @@ def test_config():
     print("Testing configuration...")
     try:
         from src.utils import Config
-        
         config = Config()
         assert config.starting_stack == 1000, "Default starting stack should be 1000"
         assert config.small_blind == 10, "Default small blind should be 10"
         assert config.big_blind == 20, "Default big blind should be 20"
-        
         config_dict = config.to_dict()
         assert isinstance(config_dict, dict), "Config should convert to dict"
-        
         print("✓ Configuration tests passed\n")
         return True
     except Exception as e:

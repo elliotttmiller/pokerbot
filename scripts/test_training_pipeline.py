@@ -18,11 +18,11 @@ import subprocess
 import numpy as np
 from src.utils import Logger
 from src.agents import ChampionAgent, CFRAgent, DQNAgent, RandomAgent, FixedStrategyAgent
-from src.evaluation import Evaluator, Trainer
-from src.game import GameState, Card, Rank, Suit
-from src.game.bucketer import Bucketer
-from src.game.masked_huber_loss import masked_huber_loss
-from src.game.strategy_filling import StrategyFilling
+from src.deepstack.evaluation import Evaluator, Trainer
+from src.deepstack.game import GameState, Card, Rank, Suit
+from src.deepstack.utils.bucketer import Bucketer
+from src.deepstack.core.masked_huber_loss import masked_huber_loss
+from src.deepstack.core.strategy_filling import StrategyFilling
 
 
 def test_imports():
@@ -32,10 +32,13 @@ def test_imports():
     
     try:
         from src.agents import ChampionAgent, CFRAgent, DQNAgent, RandomAgent, FixedStrategyAgent
-        from src.evaluation import Evaluator, Trainer
-        from src.game import GameState, Card, Rank, Suit
+        from src.deepstack.evaluation import Evaluator, Trainer
+        from src.deepstack.game import GameState, Card, Rank, Suit
         logger.info("  [OK] All imports successful")
         return True
+    except Exception as e:
+        logger.error(f"  [FAIL] Import failed: {e}")
+        return False
     except Exception as e:
         logger.error(f"  [FAIL] Import failed: {e}")
         return False
@@ -160,7 +163,7 @@ def test_agent_decision_making():
     
     try:
         from src.agents import ChampionAgent
-        from src.game import Card, Rank, Suit
+        from src.deepstack.game import Card, Rank, Suit
         
         # Load trained agent
         agent = ChampionAgent(name="TestAgent", use_pretrained=False)
@@ -241,14 +244,14 @@ def test_deepstack_module_integrations():
     logger.info("\nTEST 7: Testing DeepStack module integrations...")
     try:
         # Bucketer
-        from src.game.bucketer import Bucketer
+        from src.deepstack.utils.bucketer import Bucketer
         bucketer = Bucketer()
         bucket_idx = bucketer.get_bucket([], [])
         assert isinstance(bucket_idx, int)
         logger.info(f"  [OK] Bucketer abstraction returns bucket index: {bucket_idx}")
 
         # Masked Huber Loss
-        from src.game.masked_huber_loss import masked_huber_loss
+        from src.deepstack.core.masked_huber_loss import masked_huber_loss
         import numpy as np
         y_true = np.ones((2, 13))
         y_pred = np.zeros((2, 13))
@@ -269,7 +272,12 @@ def test_deepstack_module_integrations():
         import traceback
         traceback.print_exc()
         return False
-
+        # Yes, all imports should ideally be declared at the top of the file for clarity and maintainability.
+        # However, in test functions, sometimes imports are placed inside the function to:
+        #   - Test import errors in isolation
+        #   - Avoid unnecessary imports if the test is not run
+        #   - Reduce startup time for scripts with many dependencies
+        # For production code, move all imports to the top unless you have a specific reason to keep them inside functions.
 
 def test_agent_evaluation():
     """Test agent benchmarking using Evaluator."""
@@ -277,7 +285,7 @@ def test_agent_evaluation():
     logger.info("\nTEST 8: Testing agent evaluation and benchmarking...")
     try:
         from src.agents import ChampionAgent, RandomAgent
-        from src.evaluation.evaluator import Evaluator
+        from src.deepstack.evaluation import Evaluator
         agent = ChampionAgent(name="EvalAgent", use_pretrained=False)
         opponent = RandomAgent()
         evaluator = Evaluator([agent, opponent])

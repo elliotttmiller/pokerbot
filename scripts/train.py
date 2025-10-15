@@ -7,9 +7,15 @@ Usage examples:
     - Full/production:  python scripts/train.py --mode full --episodes 10000
 """
 
-import argparse
 import sys
+import os
+# Ensure src is in sys.path for imports
+project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+src_path = os.path.join(project_root, 'src')
+if src_path not in sys.path:
+    sys.path.insert(0, src_path)
 
+import argparse
 from src.utils import Logger
 
 # Champion pipeline imports
@@ -23,7 +29,7 @@ import numpy as np
 import random
 
 from src.agents import ChampionAgent, CFRAgent, FixedStrategyAgent, RandomAgent
-from src.game import Action, Card, GameState
+from src.deepstack.game import Card, GameState, Action
 from src.utils.data_validation import validate_deepstacked_samples, validate_equity_table
 
 
@@ -63,6 +69,7 @@ def main():
 
     # Champion pipeline (consolidated)
     # Minimal inline versions of config and trainer to avoid cross-file duplication
+    import torch
     class TrainingConfig:
         def __init__(self, mode: str = 'smoketest'):
             self.mode = mode
@@ -77,8 +84,8 @@ def main():
             self.batch_size = cfg["batch_size"]
             self.validation_hands = cfg["validation_hands"]
 
-            self.samples_path = cfg.get("samples_path", "data/deepstacked_training/train_samples")
-            self.test_samples_path = cfg.get("test_samples_path", "data/deepstacked_training/test_samples")
+            self.samples_path = cfg.get("samples_path", "data/deepstacked_training/samples/train_samples")
+            self.test_samples_path = cfg.get("test_samples_path", "data/deepstacked_training/samples/test_samples")
             self.equity_path = cfg.get("equity_path", "data/equity_tables/preflop_equity.json")
 
             self.model_dir = "models"
@@ -99,6 +106,27 @@ def main():
                 'opponent_difficulty': [],
                 'episode_reward_mean': [],
             }
+
+            # Explicitly load and log training/validation samples
+            self.train_inputs = self._load_and_log_tensor('train_inputs.pt')
+            self.train_mask = self._load_and_log_tensor('train_mask.pt')
+            self.train_targets = self._load_and_log_tensor('train_targets.pt')
+            self.valid_inputs = self._load_and_log_tensor('valid_inputs.pt')
+            self.valid_mask = self._load_and_log_tensor('valid_mask.pt')
+            self.valid_targets = self._load_and_log_tensor('valid_targets.pt')
+
+        def _load_and_log_tensor(self, fname):
+            fpath = os.path.join(self.samples_path, fname)
+            if not os.path.isfile(fpath):
+                print(f"[SAMPLES] Missing file: {fpath}")
+                return None
+            try:
+                tensor = torch.load(fpath)
+                print(f"[SAMPLES] Loaded {fname}: shape={tuple(tensor.shape)}, dtype={tensor.dtype}, sum={tensor.sum().item()}")
+                return tensor
+            except Exception as e:
+                print(f"[SAMPLES] Error loading {fname}: {e}")
+                return None
 
     class ProgressiveTrainer:
         def __init__(self, config: TrainingConfig, agent: ChampionAgent, verbose: bool = True):
