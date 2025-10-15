@@ -6,6 +6,9 @@ pillow
 tensorflow
 keras
 torch
+optuna
+ray[tune]
+tensorflow-model-optimization
 
 # Vision and OCR
 openai
@@ -30,6 +33,9 @@ certifi
 # Data analysis/visualization
 pandas
 matplotlib
+seaborn
+plotly
+streamlit
 
 # Testing
 pytest

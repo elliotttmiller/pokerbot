@@ -8,6 +8,9 @@ from .fixed_strategy_agent import FixedStrategyAgent
 from .random_agent import RandomAgent
 from .advanced_cfr import AdvancedCFRAgent
 from .search_agent import SearchAgent
+from .opponent_model import OpponentModel
+from .meta_agent import MetaAgent
+from .elite_unified_agent import EliteUnifiedAgent, OpponentAgent
 
 __all__ = [
     'BaseAgent',
@@ -18,4 +21,8 @@ __all__ = [
     'RandomAgent',
     'AdvancedCFRAgent',
     'SearchAgent',
+    'OpponentModel',
+    'MetaAgent',
+    'EliteUnifiedAgent',
+    'OpponentAgent',
 ]

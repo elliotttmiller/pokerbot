@@ -50,7 +50,7 @@ from scipy.stats import ttest_ind
 # Add parent directory to path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-from src.agents import ChampionAgent, CFRAgent, DQNAgent, FixedStrategyAgent, RandomAgent
+from src.agents import ChampionAgent, CFRAgent, DQNAgent, FixedStrategyAgent, RandomAgent, MetaAgent
 from src.evaluation import Evaluator, Trainer
 from src.game import Action, Card, GameState
 from src.deepstack.bucketer import Bucketer
@@ -64,6 +64,8 @@ from src.deepstack.monte_carlo import MonteCarloSimulator
 from src.deepstack.card_abstraction import CardAbstraction
 from src.deepstack.hand_evaluator import HandEvaluator
 from src.utils import Config, Logger
+from src.utils.data_validation import validate_deepstacked_samples, validate_equity_table
+from src.utils.model_optimization import quantize_model, prune_model, save_tflite, strip_pruning
 
 
 class TrainingConfig:
@@ -87,6 +89,11 @@ class TrainingConfig:
         self.save_interval = cfg["save_interval"]
         self.batch_size = cfg["batch_size"]
         self.validation_hands = cfg["validation_hands"]
+
+        # Data paths (with sensible defaults)
+        self.samples_path = cfg.get("samples_path", "data/deepstacked_training/train_samples")
+        self.test_samples_path = cfg.get("test_samples_path", "data/deepstacked_training/test_samples")
+        self.equity_path = cfg.get("equity_path", "data/equity_tables/preflop_equity.json")
         
         # Shared settings
         self.model_dir = "models"
@@ -101,7 +108,8 @@ class TrainingConfig:
             "random",
             "fixed",
             "cfr",
-            "dqn"
+            "dqn",
+            "meta",
         ]
         
         # Metrics tracking
@@ -111,7 +119,8 @@ class TrainingConfig:
             'evaluation_scores': [],
             'epsilon_values': [],
             'loss_values': [],
-            'stage_transitions': []
+            'stage_transitions': [],
+            'opponent_difficulty': [],
         }
 
 
@@ -165,7 +174,8 @@ class ProgressiveTrainer:
             'random': [RandomAgent(f"Random{i}") for i in range(2)],
             'fixed': [FixedStrategyAgent(f"Fixed{i}") for i in range(2)],
             'cfr': [CFRAgent(f"CFR{i}") for i in range(2)],
-            'dqn': []  # Will create if TensorFlow available
+            'dqn': [],  # Will create if TensorFlow available
+            'meta': [],
         }
         
         # Try to create DQN opponents
@@ -184,6 +194,11 @@ class ProgressiveTrainer:
             ]
         except Exception:
             self.logger.warning("Could not create DQN opponents (TensorFlow issue)")
+
+        # Create meta-learning opponents wrapping deterministic strategies
+        for i in range(2):
+            base = FixedStrategyAgent(f"MetaBase{i}")
+            opponents['meta'].append(MetaAgent(base, name=f"Meta{i}"))
         
         return opponents
     
@@ -199,6 +214,12 @@ class ProgressiveTrainer:
         self.logger.info("="*70)
         self.logger.info(f"Mode: {self.config.mode.upper()}")
         self.logger.info(f"Start time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+        self.logger.info("")
+
+        # Stage 0: Data validation
+        self.logger.info("PRECHECKS & DATA VALIDATION")
+        self.logger.info("-"*70)
+        self._stage0_validate_data()
         self.logger.info("")
         
         # Stage 1: CFR Warmup (Game-theoretic foundation)
@@ -240,6 +261,52 @@ class ProgressiveTrainer:
         
         return self.stats
     
+    def _stage0_validate_data(self):
+        """Validate DeepStacked datasets and equity tables before training."""
+
+        self.stats['current_stage'] = 0
+        self.config.metrics['stage_transitions'].append({
+            'stage': 0,
+            'episode': self.stats['total_episodes'],
+            'timestamp': time.time() - self.stats['start_time']
+        })
+
+        samples_report = validate_deepstacked_samples(self.config.samples_path)
+        self.logger.info(f"  Training samples path: {self.config.samples_path}")
+        if samples_report.get('errors'):
+            for err in samples_report['errors']:
+                self.logger.error(f"    [FAIL] {err}")
+            raise ValueError("DeepStacked training samples failed validation")
+        else:
+            file_summary = {k: v['size'] for k, v in samples_report.get('files', {}).items()}
+            self.logger.info(f"    [OK] Samples validated (entries: {file_summary})")
+
+        if os.path.exists(self.config.test_samples_path):
+            test_report = validate_deepstacked_samples(self.config.test_samples_path)
+            if test_report.get('errors'):
+                for err in test_report['errors']:
+                    self.logger.warning(f"    [WARN] Test samples issue: {err}")
+            else:
+                self.logger.info(f"    [OK] Test samples validated ({self.config.test_samples_path})")
+        else:
+            self.logger.warning(f"    [WARN] Test samples directory missing: {self.config.test_samples_path}")
+
+        equity_report = validate_equity_table(self.config.equity_path)
+        self.logger.info(f"  Equity table path: {self.config.equity_path}")
+        if equity_report.get('error'):
+            self.logger.error(f"    [FAIL] Equity table error: {equity_report['error']}")
+            raise ValueError("Equity table validation failed")
+        elif not equity_report.get('ok', False):
+            self.logger.error("    [FAIL] Equity table structure invalid")
+            raise ValueError("Equity table validation failed")
+        else:
+            self.logger.info(f"    [OK] Equity entries: {equity_report['count']}")
+
+        self.stats['validation'] = {
+            'samples': samples_report,
+            'equity': equity_report,
+        }
+
     def _stage1_cfr_warmup(self):
         """Stage 1: Train CFR component for game-theoretic foundation."""
         self.stats['current_stage'] = 1
@@ -372,6 +439,10 @@ class ProgressiveTrainer:
             
             self.stats['total_episodes'] += 1
             self.stats['total_hands_played'] += 1
+
+            active_difficulties = [s['difficulty'] for s in opponent_stats.values() if s['total'] > 0]
+            if active_difficulties:
+                self.config.metrics['opponent_difficulty'].append(float(np.mean(active_difficulties)))
             
             # Train on experience with enhanced replay
             if len(self.agent.memory) >= self.config.batch_size:
@@ -508,6 +579,12 @@ class ProgressiveTrainer:
                         current_bet, player_stack, current_bet
                     )
                     actions_taken.append(self._action_to_index(action))
+
+                    if hasattr(opponent, "integrate_opponent_action"):
+                        try:
+                            opponent.integrate_opponent_action(self.agent.name, action)
+                        except Exception:
+                            pass
                 else:
                     # Opponent's turn
                     action, raise_amount = opponent.choose_action(
@@ -856,6 +933,9 @@ class ProgressiveTrainer:
         
         # Save agent strategy
         self.agent.save_strategy(filepath)
+
+        if final:
+            self._optimize_final_model(filepath)
         
         # Save training metadata
         metadata = {
@@ -876,6 +956,39 @@ class ProgressiveTrainer:
         if self.verbose:
             self.logger.info(f"  Checkpoint saved: {filepath}")
     
+    def _optimize_final_model(self, filepath: str):
+        """Apply pruning and quantization to the final saved model."""
+
+        if not getattr(self.agent, "model", None):
+            self.logger.info("  [SKIP] No Keras model attached; skipping optimization")
+            return
+
+        try:
+            import tensorflow as tf
+        except ImportError:
+            self.logger.warning("  [WARN] TensorFlow not available; skipping optimization")
+            return
+
+        try:
+            model = tf.keras.models.load_model(f"{filepath}.keras")
+        except Exception:
+            model = self.agent.model
+
+        try:
+            pruned = prune_model(model, final_sparsity=0.5, end_step=400)
+            pruned = strip_pruning(pruned)
+            pruned_path = f"{filepath}_pruned.keras"
+            pruned.save(pruned_path)
+
+            tflite_bytes = quantize_model(pruned)
+            save_tflite(tflite_bytes, f"{filepath}.tflite")
+
+            self.logger.info(
+                f"  [OK] Model optimization complete -> {os.path.basename(pruned_path)}, {os.path.basename(filepath)}.tflite"
+            )
+        except Exception as exc:
+            self.logger.warning(f"  [WARN] Model optimization failed: {exc}")
+
     def _generate_training_report(self, final_results: Dict, comparison_results: Dict = None):
         """
         Generate comprehensive training report.

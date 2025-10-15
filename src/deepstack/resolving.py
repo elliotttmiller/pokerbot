@@ -155,6 +155,18 @@ class Resolving:
         if self.current_node is None or not self.current_node.children:
             return []
         return self.current_node.actions
+
+    def get_strategy(self) -> Dict[str, np.ndarray]:
+        """Return the latest average strategy dictionary."""
+        if self.strategy is None:
+            return {}
+        return self.strategy
+
+    def get_root_strategy(self) -> Optional[np.ndarray]:
+        """Return strategy probabilities for the root information set."""
+        if self.strategy is None:
+            return None
+        return self.strategy.get('root')
     
     def get_root_cfv(self) -> np.ndarray:
         """
