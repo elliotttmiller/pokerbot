@@ -1,6 +1,7 @@
 """Source package initialization."""
 
-from . import agents, evaluation, game, utils, vision
+from . import agents, utils, vision
+from .deepstack import game, evaluation
 
 __all__ = [
     'agents',

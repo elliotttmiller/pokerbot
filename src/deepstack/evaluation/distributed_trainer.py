@@ -14,8 +14,8 @@ try:
 except ImportError:
     HAS_TQDM = False
 
-from ..agents.advanced_cfr import AdvancedCFRAgent
-from ..agents.cfr_agent import CFRAgent
+from src.agents.advanced_cfr import AdvancedCFRAgent
+from src.agents.cfr_agent import CFRAgent
 from ..game import GameState
 
 

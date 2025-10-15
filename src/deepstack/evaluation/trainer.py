@@ -5,7 +5,7 @@ from typing import List, Optional
 
 import numpy as np
 
-from ..agents import BaseAgent, DQNAgent
+from src.agents import BaseAgent, DQNAgent
 from ..game import Action, BettingRound, GameState
 
 
@@ -24,7 +24,7 @@ class Trainer:
         self.opponent = opponent
         
         if self.opponent is None:
-            from ..agents import RandomAgent
+            from src.agents import RandomAgent
             self.opponent = RandomAgent("Opponent")
     
     def train(self, num_episodes: int = 1000, 

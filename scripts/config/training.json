@@ -1,13 +1,13 @@
 {
-  "num_buckets": 10,
-  "bucket_count": 10,
+  "num_buckets": 36,
+  "bucket_count": 36,
   "bet_sizing": [1, 2],
-  "hidden_sizes": [128, 128, 64],
-  "activation": "relu",
+  "hidden_sizes": [256, 256, 128],
+  "activation": "prelu",
   "data_path": "data/deepstacked_training/samples/train_samples",
   "batch_size": 32,
-  "use_gpu": false,
+  "use_gpu": true,
   "lr": 0.001,
-  "epochs": 10,
+  "epochs": 50,
   "model_save_dir": "models/pretrained"
 }
