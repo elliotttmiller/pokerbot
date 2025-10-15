@@ -1,6 +1,29 @@
 # Poker Bot - Advanced AI Poker Agent
 
-A comprehensive poker bot system with multiple AI agents, including advanced CFR with pruning, DQN, and unified champion agents. The system features vision-based game state detection, distributed training, and real-time search capabilities.
+A comprehensive poker bot system with multiple AI agents, including advanced CFR with pruning, DQN, and unified champion agents. The system features **a fully optimized DeepStack training pipeline**, vision-based game state detection, distributed training, and real-time search capabilities.
+
+## 🚀 What's New
+
+### Optimized DeepStack Training System ✨
+
+The DeepStack neural network training pipeline has been completely optimized and is now production-ready:
+
+- **✅ Fixed all import issues** - Proper module structure and imports
+- **✅ Corrected training configuration** - Accurate num_buckets (36) matching training data
+- **✅ Enhanced training script** - Early stopping, LR scheduling, gradient clipping
+- **✅ Model validation tools** - Comprehensive quality assessment
+- **✅ Complete documentation** - Full guides and integration examples
+
+**Quick Start:**
+```bash
+# Train DeepStack value network (5 min on GPU)
+python scripts/train_deepstack.py --use-gpu
+
+# Validate trained model
+python scripts/validate_deepstack_model.py
+```
+
+See [DeepStack Training Guide](docs/DEEPSTACK_TRAINING.md) for complete documentation.
 
 ## Features
 
