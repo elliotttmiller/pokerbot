@@ -1,42 +1,61 @@
-#!/usr/bin/env python3
-"""CLI for pruning and quantizing Keras models.
-
-Examples:
-  python scripts/optimize_model.py --input models/versions/champion_best.keras --output models/versions/champion_best_pruned.keras --prune --sparsity 0.6
-  python scripts/optimize_model.py --input models/versions/champion_best.keras --tflite models/versions/champion_best.tflite --quantize
-"""
-import argparse
+import optuna
+import mlflow
+import torch
+import sys
 import os
-import tensorflow as tf
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'src')))
+from deepstack.core.deepstack_trainer import DeepStackTrainer
+from deepstack.core.data_stream import DataStream
+import json
 
-from src.utils.model_optimization import prune_model, strip_pruning, quantize_model, save_tflite
+# Load config
+with open('scripts/config/training.json') as f:
+    config = json.load(f)
 
+def objective(trial):
+    # Suggest hyperparameters
+    lr = trial.suggest_loguniform('lr', 1e-5, 1e-2)
+    batch_size = trial.suggest_categorical('batch_size', [32, 64, 128])
+    epochs = trial.suggest_int('epochs', 10, 50)
+    # Update config
+    config['lr'] = lr
+    config['batch_size'] = batch_size
+    config['epochs'] = epochs
+    config['train_batch_size'] = batch_size
+    # Data and trainer
+    data_path = config.get('data_path', '../data/deepstacked_training/samples/train_samples')
+    data_stream = DataStream(data_path, batch_size)
+    trainer = DeepStackTrainer(config, data_stream)
+    # MLflow tracking
+    with mlflow.start_run():
+        mlflow.log_params({'lr': lr, 'batch_size': batch_size, 'epochs': epochs})
+        trainer.train()
+        val_loss = trainer.best_val_loss
+        mlflow.log_metric('val_loss', val_loss)
+    return val_loss
 
-def main():
-    p = argparse.ArgumentParser()
-    p.add_argument("--input", required=True, help="Path to Keras model (.keras or .h5)")
-    p.add_argument("--output", default=None, help="Path to save pruned model")
-    p.add_argument("--tflite", default=None, help="Path to save TFLite model")
-    p.add_argument("--prune", action="store_true")
-    p.add_argument("--quantize", action="store_true")
-    p.add_argument("--sparsity", type=float, default=0.5)
-    args = p.parse_args()
+# Optuna study
+study = optuna.create_study(direction='minimize')
+study.optimize(objective, n_trials=20)
+print('Best hyperparameters:', study.best_params)
 
-    model = tf.keras.models.load_model(args.input, compile=False)
-
-    if args.prune:
-        model = prune_model(model, final_sparsity=args.sparsity)
-        model = strip_pruning(model)
-        if args.output:
-            model.save(args.output)
-            print(f"Pruned model saved to {args.output}")
-
-    if args.quantize:
-        tflite = quantize_model(model)
-        if args.tflite:
-            save_tflite(tflite, args.tflite)
-            print(f"Quantized TFLite model saved to {args.tflite}")
-
+# Ensemble/meta-learning entry point (placeholder)
+def run_ensemble(net_class, epochs):
+    # Example: load multiple best models and average predictions
+    model_paths = [f"models/pretrained/epoch_{i}.pt" for i in range(1, epochs+1)]
+    models = []
+    for path in model_paths:
+        if os.path.exists(path):
+            net = net_class()
+            net.load_state_dict(torch.load(path))
+            models.append(net)
+    # ...ensemble logic here...
+    print(f"Loaded {len(models)} models for ensemble/meta-learning.")
 
 if __name__ == "__main__":
-    main()
+    # Run Optuna hyperparameter search and MLflow tracking
+    # Optionally run ensemble/meta-learning
+    # You must pass the correct net class and epochs after Optuna search
+    # Example usage after study.optimize:
+    # run_ensemble(DeepStackTrainer(config, data_stream).net.__class__, config['epochs'])
+    pass

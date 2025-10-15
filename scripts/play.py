@@ -5,7 +5,7 @@ import argparse
 import os
 import time
 
-from src.agents import DQNAgent, FixedStrategyAgent
+from src.agents import create_agent
 from src.utils import Config, Logger
 from src.vision import ActionMapper, ScreenController, VisionDetector
 
@@ -43,11 +43,13 @@ def main():
     os.makedirs(config.screenshot_dir, exist_ok=True)
     
     # Create agent
+    logger.info(f"Creating agent via factory: {args.agent}")
     if args.agent == 'dqn':
-        logger.info("Creating DQN agent")
-        agent = DQNAgent(state_size=60, action_size=3)
-        agent.set_training_mode(False)
-        
+        agent = create_agent('dqn', state_size=60, action_size=3)
+        try:
+            agent.set_training_mode(False)
+        except Exception:
+            pass
         if args.model_path:
             logger.info(f"Loading model from {args.model_path}")
             try:
@@ -59,8 +61,7 @@ def main():
         else:
             logger.warning("No model path provided, using untrained DQN agent")
     else:
-        logger.info("Creating Fixed Strategy agent")
-        agent = FixedStrategyAgent()
+        agent = create_agent('fixed')
     
     # Create vision detector
     logger.info("Initializing vision detector")

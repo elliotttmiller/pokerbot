@@ -11,6 +11,7 @@ from .search_agent import SearchAgent
 from .opponent_model import OpponentModel
 from .meta_agent import MetaAgent
 from .elite_unified_agent import EliteUnifiedAgent, OpponentAgent
+from .agent import create_agent, get_available_agents, register
 
 __all__ = [
     'BaseAgent',
@@ -25,4 +26,7 @@ __all__ = [
     'MetaAgent',
     'EliteUnifiedAgent',
     'OpponentAgent',
+    'create_agent',
+    'get_available_agents',
+    'register',
 ]

@@ -20,21 +20,22 @@ import tensorflow as tf
 import torch
 import torch.nn as nn
 
-from ..game import Action, Card, HandEvaluator
+from deepstack.game.game_state import Action, HandEvaluator
+from deepstack.game.card import Card
 from ..utils.model_loader import ModelLoader, TrainingDataManager
 from .base_agent import BaseAgent
 from .cfr_agent import CFRAgent, InfoSet
-from .deepstack_lookahead import DeepStackLookahead
-from src.deepstack.bucketer import Bucketer
-from src.deepstack.card_abstraction import CardAbstraction
-from src.deepstack.cfrd_gadget import CFRDGadget
-from src.deepstack.hand_evaluator import HandEvaluator
-from src.deepstack.masked_huber_loss import masked_huber_loss
-from src.deepstack.monte_carlo import MonteCarloSimulator
-from src.deepstack.strategy_filling import StrategyFilling
-from src.deepstack.terminal_equity import TerminalEquity
-from src.deepstack.tree_builder import PokerTreeBuilder
-from src.deepstack.tree_cfr import TreeCFR
+from .lookahead_wrapper import DeepStackLookahead
+from deepstack.utils.bucketer import Bucketer
+from deepstack.utils.card_abstraction import CardAbstraction
+from deepstack.core.cfrd_gadget import CFRDGadget
+from src.deepstack.utils.hand_evaluator import HandEvaluator
+from src.deepstack.core.masked_huber_loss import masked_huber_loss
+from src.deepstack.core.monte_carlo import MonteCarloSimulator
+from src.deepstack.core.strategy_filling import StrategyFilling
+from src.deepstack.core.terminal_equity import TerminalEquity
+from src.deepstack.core.tree_builder import PokerTreeBuilder
+from src.deepstack.core.tree_cfr import TreeCFR
 
 
 class ChampionAgent(BaseAgent):
@@ -93,12 +94,9 @@ class ChampionAgent(BaseAgent):
         
         # Initialize CFR component
         self.cfr = CFRAgent(name=f"{name}_CFR")
-        
-        # Enable CFR+ if requested
         self.use_cfr_plus = use_cfr_plus
         if use_cfr_plus:
             self.cfr.enable_cfr_plus()
-        
         # DQN components
         self.state_size = state_size
         self.action_size = action_size
@@ -108,15 +106,18 @@ class ChampionAgent(BaseAgent):
         self.epsilon_min = epsilon_min
         self.epsilon_decay = epsilon_decay
         self.learning_rate = learning_rate
-        
         # Neural network model
         self.model = None
         self._build_model()
-        
         # Pre-trained models and data
         self.use_pretrained = use_pretrained
         self.model_loader = None
         self.data_manager = None
+        # Pluggable bucketing and action abstraction
+        from src.deepstack.utils.bucketer import Bucketer
+        from src.deepstack.utils.action_abstraction import ActionAbstraction
+        self.bucketer = Bucketer({'n_buckets': 10, 'bucketing_strategy': 'default'})
+        self.action_abstraction = ActionAbstraction({'action_abstraction_strategy': 'default'})
         
         if use_pretrained:
             self._load_pretrained_models()
@@ -259,13 +260,10 @@ class ChampionAgent(BaseAgent):
         Returns:
             NumPy array representing state
         """
-        bucketer = Bucketer()
-        # Abstract hole cards and community cards into buckets
-        hole_bucket = bucketer.get_bucket(hole_cards, community_cards)
+        # Use pluggable bucketer
+        hole_bucket = self.bucketer.get_bucket(hole_cards, community_cards)
         state = np.zeros(self.state_size)
-        # Use bucket index as part of state encoding
-        state[0] = hole_bucket / bucketer.n_buckets
-        
+        state[0] = hole_bucket / self.bucketer.n_buckets
         # Encode game state
         idx = 1
         state[idx] = min(pot / 1000.0, 1.0)
@@ -273,6 +271,13 @@ class ChampionAgent(BaseAgent):
         state[idx + 2] = min(player_stack / 1000.0, 1.0)
         state[idx + 3] = min(opponent_bet / 500.0, 1.0)
         state[idx + 4] = len(community_cards) / 5.0
+        return state
+
+    def decide_action(self, state):
+        # Use pluggable action abstraction
+        actions = self.action_abstraction.get_actions(state)
+        # Placeholder: always call if available
+        return 'call' if 'call' in actions else actions[0]
         
         # Add equity information if available
         if self.data_manager and len(community_cards) == 0:
@@ -1028,7 +1033,7 @@ def masked_huber_loss_with_mask(y_true, y_pred):
     Masked Huber loss for DeepStack value network training.
     Uses imported masked_huber_loss for consistency.
     """
-    from src.deepstack.masked_huber_loss import masked_huber_loss
+    from src.deepstack.core.masked_huber_loss import masked_huber_loss
     return masked_huber_loss(y_true, y_pred)
 
 def generate_deepstack_training_data(train_data_count, valid_data_count, output_dir):

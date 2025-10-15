@@ -19,8 +19,9 @@ from typing import Dict, List, Optional, Tuple
 
 import numpy as np
 
-from ..game import Action, Card, GameState
-from src.deepstack.hand_evaluator import HandEvaluator
+from deepstack.game.game_state import Action, GameState
+from deepstack.game.card import Card
+from deepstack.utils.hand_evaluator import HandEvaluator
 
 
 class InfoSet:
@@ -397,6 +398,146 @@ class CFRAgent:
                 print(f"  Iteration {i + 1}/{num_iterations} - Avg Regret: {avg_regret:.6f}")
         
         print(f"[OK] CFR+ training complete ({self.iterations} total iterations)")
+
+
+class AdvancedCFRAgent(CFRAgent):
+    """Advanced CFR with pruning and linear discounting (merged from advanced_cfr)."""
+
+    def __init__(self, name: str = "AdvancedCFR", regret_floor: int = -310000000, use_linear_cfr: bool = True):
+        super().__init__(name)
+        self.regret_floor = regret_floor
+        self.use_linear_cfr = use_linear_cfr
+
+    def train_progressive(
+        self,
+        num_iterations: int = 50000,
+        warmup_threshold: int = 1000,
+        prune_threshold: int = 10000,
+        lcfr_threshold: int = 50000,
+        discount_interval: int = 1000,
+        strategy_interval: int = 100,
+        game_state: Optional[GameState] = None,
+        verbose: bool = True,
+    ) -> None:
+        if game_state is None:
+            game_state = GameState(num_players=2)
+
+        for t in range(1, num_iterations + 1):
+            game_state.reset()
+
+            if t < warmup_threshold:
+                method = "CFR (warmup)"
+                for player_idx in range(2):
+                    game_state.reset()
+                    self._cfr_iteration(game_state, player_idx, 1.0, 1.0)
+            elif t < prune_threshold:
+                method = "CFR with light pruning"
+                for player_idx in range(2):
+                    game_state.reset()
+                    c = self.regret_floor // 10
+                    self._cfrp_iteration(game_state, player_idx, 1.0, 1.0, c)
+            elif t < lcfr_threshold:
+                method = "Mixed CFR/CFRp"
+                for player_idx in range(2):
+                    game_state.reset()
+                    if random.random() < 0.05:
+                        self._cfr_iteration(game_state, player_idx, 1.0, 1.0)
+                    else:
+                        c = self.regret_floor
+                        self._cfrp_iteration(game_state, player_idx, 1.0, 1.0, c)
+            else:
+                method = "Linear CFR"
+                for player_idx in range(2):
+                    game_state.reset()
+                    c = self.regret_floor
+                    self._cfrp_iteration(game_state, player_idx, 1.0, 1.0, c)
+
+                if self.use_linear_cfr and t % discount_interval == 0:
+                    self._apply_linear_discount(t, discount_interval)
+
+            if t % strategy_interval == 0:
+                self._update_average_strategy()
+
+            self.iterations = t
+
+            if verbose and (t % 1000 == 0 or t == num_iterations):
+                print(f"Iteration {t}/{num_iterations} - Method: {method}")
+
+    def _cfrp_iteration(
+        self,
+        game_state: GameState,
+        player_idx: int,
+        p0: float,
+        p1: float,
+        c: int,
+    ) -> float:
+        if game_state.is_hand_complete():
+            winners = game_state.get_winners()
+            if player_idx in winners:
+                return game_state.pot / len(winners)
+            return 0.0
+
+        current_player = player_idx
+        available_actions = self._get_available_actions(game_state, player_idx)
+        infoset_key = self.create_infoset_key(
+            game_state.players[player_idx].hand,
+            game_state.community_cards,
+            "",
+        )
+        infoset = self.get_infoset(infoset_key, available_actions)
+
+        if current_player == player_idx:
+            strategy = infoset.get_strategy(p0 if player_idx == 0 else p1)
+        else:
+            strategy = infoset.get_average_strategy()
+
+        action_utilities = np.zeros(len(available_actions))
+        explored_actions: List[int] = []
+
+        for action_idx, action in enumerate(available_actions):
+            if current_player == player_idx and infoset.regret_sum[action_idx] < c:
+                action_utilities[action_idx] = 0.0
+                continue
+
+            explored_actions.append(action_idx)
+            next_state = self._apply_action_copy(game_state, player_idx, action)
+
+            if current_player == player_idx:
+                if player_idx == 0:
+                    action_utilities[action_idx] = self._cfrp_iteration(
+                        next_state, player_idx, p0 * strategy[action_idx], p1, c
+                    )
+                else:
+                    action_utilities[action_idx] = self._cfrp_iteration(
+                        next_state, player_idx, p0, p1 * strategy[action_idx], c
+                    )
+            else:
+                action_utilities[action_idx] = self._cfrp_iteration(
+                    next_state, player_idx, p0, p1, c
+                )
+
+        node_utility = np.sum(strategy * action_utilities)
+
+        if current_player == player_idx:
+            for action_idx in explored_actions:
+                regret = action_utilities[action_idx] - node_utility
+                opponent_reach = p1 if player_idx == 0 else p0
+                infoset.update_regret(action_idx, opponent_reach * regret)
+                if infoset.regret_sum[action_idx] < self.regret_floor:
+                    infoset.regret_sum[action_idx] = self.regret_floor
+
+        return node_utility
+
+    def _apply_linear_discount(self, t: int, discount_interval: int) -> None:
+        d = (t / discount_interval) / ((t / discount_interval) + 1)
+        for infoset in self.infosets.values():
+            for i in range(infoset.num_actions):
+                infoset.regret_sum[i] *= d
+                infoset.strategy_sum[i] *= d
+
+    def _update_average_strategy(self) -> None:
+        for infoset in self.infosets.values():
+            infoset.get_strategy(1.0)
     
     def _reset_negative_regrets(self):
         """CFR+: Reset negative regrets to 0 for faster convergence."""

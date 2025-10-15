@@ -8,7 +8,8 @@ Implements two-stage approach from Pluribus:
 from typing import List, Optional, Tuple
 import numpy as np
 
-from ..game import Action, Card, GameState
+from deepstack.game.game_state import Action, GameState
+from deepstack.game.card import Card
 from .champion_agent import ChampionAgent
 
 

@@ -34,16 +34,16 @@ import pickle
 from ..game import Action, Card, GameState, HandEvaluator
 from ..utils.model_loader import ModelLoader, TrainingDataManager
 from .base_agent import BaseAgent
-from src.deepstack.resolving import Resolving
-from src.deepstack.tree_builder import PokerTreeBuilder
-from src.deepstack.tree_cfr import TreeCFR
-from src.deepstack.cfrd_gadget import CFRDGadget
-from src.deepstack.value_nn import ValueNN
-from src.deepstack.terminal_equity import TerminalEquity
-from src.deepstack.bucketer import Bucketer
-from src.deepstack.card_abstraction import CardAbstraction
-from src.deepstack.hand_evaluator import HandEvaluator
-from src.deepstack.monte_carlo import MonteCarloSimulator
+from src.deepstack.core.resolving import Resolving
+from src.deepstack.core.tree_builder import PokerTreeBuilder
+from src.deepstack.core.tree_cfr import TreeCFR
+from src.deepstack.core.cfrd_gadget import CFRDGadget
+from src.deepstack.core.value_nn import ValueNN
+from src.deepstack.core.terminal_equity import TerminalEquity
+from src.deepstack.utils.bucketer import Bucketer
+from src.deepstack.utils.card_abstraction import CardAbstraction
+from src.deepstack.utils.hand_evaluator import HandEvaluator
+from src.deepstack.core.monte_carlo import MonteCarloSimulator
 from .opponent_model import OpponentModel
 
 

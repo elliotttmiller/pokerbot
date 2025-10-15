@@ -2,8 +2,9 @@
 
 from typing import List
 
-from ..game import Action, Card
-from src.deepstack.hand_evaluator import HandEvaluator
+from deepstack.game.game_state import Action
+from deepstack.game.card import Card
+from deepstack.utils.hand_evaluator import HandEvaluator
 from .base_agent import BaseAgent
 
 

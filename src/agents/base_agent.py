@@ -3,7 +3,8 @@
 from abc import ABC, abstractmethod
 from typing import List
 
-from ..game import Action, Card
+from deepstack.game.game_state import Action
+from deepstack.game.card import Card
 
 
 class BaseAgent(ABC):

@@ -9,9 +9,9 @@ import os
 import streamlit as st
 import numpy as np
 
-from src.deepstack.tree_builder import PokerTreeBuilder
-from src.deepstack.tree_cfr import TreeCFR
-from src.deepstack.visualization import (
+from src.deepstack.core.tree_builder import PokerTreeBuilder
+from src.deepstack.core.tree_cfr import TreeCFR
+from src.deepstack.tree.visualization import (
     collect_tree_stats,
     export_strategy_table,
     summarize_cfr_results,

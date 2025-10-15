@@ -6,7 +6,8 @@ from typing import List, Optional
 
 import numpy as np
 
-from ..game import Action, Card
+from deepstack.game.game_state import Action
+from deepstack.game.card import Card
 from .base_agent import BaseAgent
 
 
