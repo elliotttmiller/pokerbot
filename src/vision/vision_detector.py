@@ -3,7 +3,7 @@
 import os
 from typing import Dict, List, Optional
 
-from ..game import Card
+from ..deepstack.game import Card
 
 
 class VisionDetector:

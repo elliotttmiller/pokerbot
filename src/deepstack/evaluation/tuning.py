@@ -13,7 +13,7 @@ from typing import Optional, Union
 
 import numpy as np
 
-from ..agents import ChampionAgent, DQNAgent, RandomAgent
+from src.agents import ChampionAgent, DQNAgent, RandomAgent
 from ..evaluation.trainer import Trainer
 from ..game import Action, GameState
 
