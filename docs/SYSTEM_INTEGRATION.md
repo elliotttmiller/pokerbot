@@ -142,8 +142,8 @@ EOF
 # Train with custom config
 python scripts/train_deepstack.py --config scripts/config/my_training.json
 
-# Hyperparameter tuning
-python scripts/tune_hyperparams.py --target deepstack --trials 50
+# Hyperparameter tuning (for DQN or Champion agents)
+python scripts/tune_hyperparams.py --target champion --trials 50
 ```
 
 ## Integration with DeepStack System
@@ -369,14 +369,14 @@ print(f'Input: {x.shape}, Output: {y.shape}')
 
 ## Advanced Topics
 
-### Distributed Training
+### Distributed Training (Future Enhancement)
 
-For training on multiple GPUs or machines:
+For training on multiple GPUs or machines, distributed training will be implemented in a future update:
 
 ```python
-# TODO: Implement with PyTorch DDP
-import torch.distributed as dist
-from torch.nn.parallel import DistributedDataParallel
+# Planned: Implement with PyTorch DDP
+# import torch.distributed as dist
+# from torch.nn.parallel import DistributedDataParallel
 ```
 
 ### Transfer Learning
@@ -391,20 +391,16 @@ python scripts/train_deepstack.py \
   --lr 0.0001  # Lower LR for fine-tuning
 ```
 
-### Model Compression
+### Model Compression (Future Enhancement)
 
-Optimize models for deployment:
+Model compression features (quantization, pruning) will be added in a future update:
 
 ```bash
-# Quantize model to int8 for faster inference
-python scripts/optimize_model.py \
-  --model models/pretrained/best_model.pt \
-  --quantize int8
+# Planned: Quantize model to int8 for faster inference
+# python scripts/compress_model.py --model models/pretrained/best_model.pt --quantize int8
 
-# Prune less important weights
-python scripts/optimize_model.py \
-  --model models/pretrained/best_model.pt \
-  --prune 0.3  # Remove 30% of weights
+# Planned: Prune less important weights
+# python scripts/compress_model.py --model models/pretrained/best_model.pt --prune 0.3
 ```
 
 ## Future Enhancements
@@ -438,8 +434,7 @@ python scripts/optimize_model.py \
 
 - `train_deepstack.py` - Main training script
 - `validate_deepstack_model.py` - Model validation
-- `tune_hyperparams.py` - Hyperparameter tuning
-- `optimize_model.py` - Model optimization
+- `tune_hyperparams.py` - Hyperparameter tuning (for agents)
 
 ### Getting Help
 
