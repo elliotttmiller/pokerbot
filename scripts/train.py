@@ -28,7 +28,7 @@ from collections import defaultdict
 import numpy as np
 import random
 
-from src.agents import ChampionAgent, CFRAgent, FixedStrategyAgent, RandomAgent
+from src.agents import ChampionAgent, CFRAgent, FixedStrategyAgent, RandomAgent, create_agent
 from src.deepstack.game import Card, GameState, Action
 from src.utils.data_validation import validate_deepstacked_samples, validate_equity_table
 
@@ -38,6 +38,8 @@ def main():
     parser = argparse.ArgumentParser(description='Train the championship-level agent (progressive pipeline)')
     parser.add_argument('--mode', type=str, choices=['smoketest', 'standard', 'production', 'full'], default='smoketest',
                        help='Training mode selects configuration profile from scripts/config')
+    parser.add_argument('--agent-type', type=str, choices=['champion', 'pokerbot'], default='champion',
+                       help='Agent type to train (champion or pokerbot)')
     parser.add_argument('--episodes', type=int, default=None,
                        help='Override number of episodes for stage 2 and 3')
     parser.add_argument('--cfr-iterations', type=int, default=None,
@@ -58,7 +60,7 @@ def main():
     
     # Initialize logger
     logger = Logger(verbose=args.verbose)
-    logger.info("Starting championship training pipeline")
+    logger.info(f"Starting championship training pipeline with {args.agent_type} agent")
 
     # Deterministic seeds
     try:
@@ -469,13 +471,26 @@ def main():
     # Initialize champion agent (prefer resume if available)
     logger = Logger(verbose=args.verbose)
     latest_model_path = os.path.join(c_cfg.versions_dir, "champion_best")
-    if os.path.exists(f"{latest_model_path}.cfr") or os.path.exists(f"{latest_model_path}.keras"):
-        logger.info(f"Resuming from latest champion model: {latest_model_path}")
-        agent = ChampionAgent(name="Champion", use_pretrained=True, use_deepstack=True)
-        agent.load_strategy(latest_model_path)
+    
+    # Choose agent based on agent_type
+    if args.agent_type == 'pokerbot':
+        logger.info("Using unified PokerBot agent")
+        if os.path.exists(f"{latest_model_path}.cfr") or os.path.exists(f"{latest_model_path}.keras"):
+            logger.info(f"Resuming from latest model: {latest_model_path}")
+            agent = create_agent('pokerbot', name="PokerBot", use_pretrained=True)
+            agent.load_models(latest_model_path)
+        else:
+            logger.info("Initializing PokerBot Agent with pre-trained models...")
+            agent = create_agent('pokerbot', name="PokerBot", use_pretrained=True)
     else:
-        logger.info("Initializing Champion Agent with pre-trained models...")
-        agent = ChampionAgent(name="Champion", use_pretrained=True, use_deepstack=True)
+        # Default: champion agent
+        if os.path.exists(f"{latest_model_path}.cfr") or os.path.exists(f"{latest_model_path}.keras"):
+            logger.info(f"Resuming from latest champion model: {latest_model_path}")
+            agent = ChampionAgent(name="Champion", use_pretrained=True, use_deepstack=True)
+            agent.load_strategy(latest_model_path)
+        else:
+            logger.info("Initializing Champion Agent with pre-trained models...")
+            agent = ChampionAgent(name="Champion", use_pretrained=True, use_deepstack=True)
 
     trainer = ProgressiveTrainer(c_cfg, agent, verbose=args.verbose)
     try:
