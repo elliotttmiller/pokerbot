@@ -1,7 +1,7 @@
 {
   "stage1_cfr_iterations": 10,
-  "stage2_selfplay_episodes": 10,
-  "stage3_vicarious_episodes": 10,
+  "stage2_selfplay_episodes": 5,
+  "stage3_vicarious_episodes": 5,
   "evaluation_interval": 5,
   "save_interval": 5,
   "batch_size": 4,

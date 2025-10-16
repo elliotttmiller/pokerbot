@@ -8,7 +8,7 @@ from src.utils.data_validation import validate_deepstacked_samples, validate_equ
 
 def main():
     p = argparse.ArgumentParser()
-    p.add_argument("--samples", default="data/deepstacked_training/train_samples")
+    p.add_argument("--samples", default=r"C:\Users\AMD\pokerbot\src\train_samples")
     p.add_argument("--equity", default="data/equity_tables/preflop_equity.json")
     args = p.parse_args()
 

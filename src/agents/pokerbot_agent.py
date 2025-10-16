@@ -85,8 +85,6 @@ class PokerBotAgent(BaseAgent):
                  
                  # DeepStack configuration
                  lookahead_depth: int = 3,
-                 
-                 # Ensemble weights
                  cfr_weight: float = 0.4,
                  dqn_weight: float = 0.3,
                  deepstack_weight: float = 0.3):
@@ -120,6 +118,7 @@ class PokerBotAgent(BaseAgent):
         """
         super().__init__(name)
         
+        super().__init__(name)
         # Configuration
         self.use_cfr = use_cfr
         self.use_cfr_plus = use_cfr_plus
@@ -127,37 +126,26 @@ class PokerBotAgent(BaseAgent):
         self.use_deepstack = use_deepstack
         self.use_opponent_modeling = use_opponent_modeling
         self.use_pretrained = use_pretrained
-        
         # Normalize ensemble weights
         total_weight = cfr_weight + dqn_weight + deepstack_weight
         self.cfr_weight = cfr_weight / total_weight if total_weight > 0 else 0.33
         self.dqn_weight = dqn_weight / total_weight if total_weight > 0 else 0.33
         self.deepstack_weight = deepstack_weight / total_weight if total_weight > 0 else 0.34
-        
         # Initialize components
         self.cfr_component = None
         self.dqn_component = None
         self.deepstack_component = None
         self.opponent_model = None
-        
         if use_cfr:
-            self._init_cfr_component(cfr_iterations, cfr_skip_iterations, 
-                                    enable_pruning, pruning_threshold)
-        
+            self._init_cfr_component(cfr_iterations, cfr_skip_iterations, enable_pruning, pruning_threshold)
         if use_dqn:
-            self._init_dqn_component(state_size, action_size, learning_rate,
-                                    gamma, epsilon, epsilon_min, epsilon_decay,
-                                    memory_size)
-        
+            self._init_dqn_component(state_size, action_size, learning_rate, gamma, epsilon, epsilon_min, epsilon_decay, memory_size)
         if use_deepstack:
             self._init_deepstack_component(lookahead_depth)
-        
         if use_opponent_modeling:
             self._init_opponent_modeling()
-        
         if use_pretrained:
             self._load_pretrained_models()
-        
         # State tracking
         self.training_mode = True
         self.stats = {
@@ -167,23 +155,24 @@ class PokerBotAgent(BaseAgent):
             'dqn_decisions': 0,
             'deepstack_decisions': 0
         }
-        
+        self._lookahead_built = False
         print(f"[PokerBot] {name} initialized successfully")
         print(f"  Components: CFR={use_cfr}, CFR+={use_cfr_plus}, DQN={use_dqn}, DeepStack={use_deepstack}")
         print(f"  Weights: CFR={self.cfr_weight:.2f}, DQN={self.dqn_weight:.2f}, DeepStack={self.deepstack_weight:.2f}")
-    
-    def _init_cfr_component(self, iterations: int, skip_iterations: int,
-                           enable_pruning: bool, threshold: float):
+
+    def start_new_hand(self):
+        """Reset lookahead build flag for new hand."""
+        self._lookahead_built = False
+
+    def _init_cfr_component(self, iterations: int, skip_iterations: int, enable_pruning: bool, threshold: float):
         """Initialize CFR/CFR+ component."""
         try:
             from .cfr_agent import CFRAgent
-            
             self.cfr_component = CFRAgent(name=f"{self.name}_CFR")
             self.cfr_iterations = iterations
             self.cfr_skip_iterations = skip_iterations
             self.enable_pruning = enable_pruning
             self.pruning_threshold = threshold
-            
             if self.use_cfr_plus:
                 # Enable CFR+ enhancements if available
                 if hasattr(self.cfr_component, 'enable_cfr_plus'):
@@ -432,7 +421,9 @@ class PokerBotAgent(BaseAgent):
         # Simplified DeepStack decision - in production would use full re-solving
         # For now, use lookahead wrapper
         try:
-            self.deepstack_component.build_lookahead(0, 1, community_cards)
+            if not self._lookahead_built:
+                self.deepstack_component.build_lookahead(0, 1, community_cards)
+                self._lookahead_built = True
             player_range = np.ones(self.action_size) / self.action_size
             opponent_range = np.ones(self.action_size) / self.action_size
             self.deepstack_component.resolve_first_node(player_range, opponent_range)

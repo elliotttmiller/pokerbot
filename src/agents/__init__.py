@@ -4,12 +4,19 @@
 from .base_agent import BaseAgent
 from .agent import create_agent, get_available_agents, register
 
-# Heavy imports are lazy-loaded through create_agent()
-# This avoids import errors and improves startup time
+
+# Unified PokerBot agent (recommended for all new training)
+from .pokerbot_agent import PokerBotAgent
+
+
+
+# Legacy agents (ChampionAgent, EliteUnifiedAgent) are deprecated and not imported directly.
+# Use create_agent('champion') or create_agent('elite') for legacy agent instantiation.
 
 __all__ = [
     'BaseAgent',
     'create_agent',
     'get_available_agents',
     'register',
+    'PokerBotAgent',
 ]

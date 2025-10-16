@@ -11,17 +11,18 @@ import numpy as np
 def validate_deepstacked_samples(path: str) -> Dict[str, Any]:
     """Validate DeepStacked training/test binary files in a directory."""
     required = [
-        ("train.inputs", np.float32),
-        ("train.targets", np.float32),
-        ("train.mask", np.float32),
-        ("valid.inputs", np.float32),
-        ("valid.targets", np.float32),
-        ("valid.mask", np.float32),
+        ("train_inputs.pt", np.float32),
+        ("train_targets.pt", np.float32),
+        ("train_mask.pt", np.float32),
+        ("valid_inputs.pt", np.float32),
+        ("valid_targets.pt", np.float32),
+        ("valid_mask.pt", np.float32),
     ]
-    results = {"path": path, "files": {}, "errors": []}
+    sample_dir = r"C:\Users\AMD\pokerbot\src\train_samples"
+    results = {"path": sample_dir, "files": {}, "errors": []}
 
     for fname, dtype in required:
-        fpath = os.path.join(path, fname)
+        fpath = os.path.join(sample_dir, fname)
         if not os.path.exists(fpath):
             results["errors"].append(f"Missing {fname}")
             continue

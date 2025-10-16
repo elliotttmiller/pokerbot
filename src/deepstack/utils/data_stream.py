@@ -11,14 +11,14 @@ class DataStream:
         self.batch_size = batch_size
         self.use_gpu = use_gpu
         # Load training data
-        train_prefix = os.path.join(data_path, 'train_samples')
-        self.data['train_inputs'] = np.fromfile(os.path.join(train_prefix, 'train.inputs'), dtype=np.float32)
-        self.data['train_targets'] = np.fromfile(os.path.join(train_prefix, 'train.targets'), dtype=np.float32)
-        self.data['train_mask'] = np.fromfile(os.path.join(train_prefix, 'train.mask'), dtype=np.float32)
+        train_prefix = data_path
+        self.data['train_inputs'] = np.load(os.path.join(train_prefix, 'train_inputs.pt'), allow_pickle=True)
+        self.data['train_targets'] = np.load(os.path.join(train_prefix, 'train_targets.pt'), allow_pickle=True)
+        self.data['train_mask'] = np.load(os.path.join(train_prefix, 'train_mask.pt'), allow_pickle=True)
         # Load validation data
-        self.data['valid_inputs'] = np.fromfile(os.path.join(train_prefix, 'valid.inputs'), dtype=np.float32)
-        self.data['valid_targets'] = np.fromfile(os.path.join(train_prefix, 'valid.targets'), dtype=np.float32)
-        self.data['valid_mask'] = np.fromfile(os.path.join(train_prefix, 'valid.mask'), dtype=np.float32)
+        self.data['valid_inputs'] = np.load(os.path.join(train_prefix, 'valid_inputs.pt'), allow_pickle=True)
+        self.data['valid_targets'] = np.load(os.path.join(train_prefix, 'valid_targets.pt'), allow_pickle=True)
+        self.data['valid_mask'] = np.load(os.path.join(train_prefix, 'valid_mask.pt'), allow_pickle=True)
         self.train_data_count = len(self.data['train_inputs'])
         self.valid_data_count = len(self.data['valid_inputs'])
         # Reshape as needed (user should specify shapes)

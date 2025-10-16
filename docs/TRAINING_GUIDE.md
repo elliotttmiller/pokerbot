@@ -1,493 +1,825 @@
-# Champion Agent Training Pipeline - User Guide
+# PokerBot Training Guide
+## Complete System Training and Testing Manual
 
-## Overview
+This guide provides comprehensive, step-by-step instructions for training your world-class PokerBot agent from scratch to championship-level performance.
 
-This guide provides step-by-step instructions for training and validating the Champion Agent using our advanced progressive training pipeline with vicarious learning capabilities.
+---
 
-## What is the Training Pipeline?
+## Table of Contents
 
-The training pipeline implements a state-of-the-art, multi-stage approach to train the Champion Agent:
+1. [Prerequisites](#prerequisites)
+2. [System Architecture Overview](#system-architecture-overview)
+3. [Training Pipeline Stages](#training-pipeline-stages)
+4. [Quick Start: Smoketest](#quick-start-smoketest)
+5. [Standard Training](#standard-training)
+6. [Production Training](#production-training)
+7. [Model Evaluation](#model-evaluation)
+8. [Troubleshooting](#troubleshooting)
+9. [Next Steps: Vision System](#next-steps-vision-system)
 
-1. **Stage 1: CFR Warmup** - Builds game-theoretic foundation through Counterfactual Regret Minimization
-2. **Stage 2: Self-Play** - Iterative improvement through playing against itself
-3. **Stage 3: Vicarious Learning** - Learning from diverse opponents (Random, Fixed, CFR, DQN agents)
-
-This progressive approach creates a well-rounded, adaptable agent that combines theoretical optimality with practical adaptability.
+---
 
 ## Prerequisites
 
-### System Requirements
-- Python 3.8 or higher
-- 4GB RAM minimum (8GB recommended)
-- 2GB free disk space for models
-
-### Python Dependencies
-```bash
-pip install numpy tensorflow
-```
-
-All other dependencies should already be installed as part of the project.
-
-## Quick Start - Smoketest Mode
-
-**Recommended for first-time users!** This mode runs a quick validation to ensure everything works correctly.
-
-### Step 1: Run Smoketest Training
+### 1. Environment Setup
 
 ```bash
-cd /path/to/pokerbot
-python scripts/train_champion.py --mode smoketest
+# Clone repository (if not already done)
+git clone https://github.com/elliotttmiller/pokerbot.git
+cd pokerbot
+
+# Install dependencies
+pip install -r requirements.txt
+
+# Verify installation
+python -c "import tensorflow, torch, numpy; print('✓ All dependencies installed')"
 ```
+
+### 2. Data Preparation
+
+The training pipeline requires:
+
+**Training Data** (Located in `data/deepstacked_training/samples/train_samples/`):
+- `train_inputs.pt` - Training input tensors
+- `train_targets.pt` - Training target values
+- `train_mask.pt` - Training masks
+- `valid_inputs.pt` - Validation inputs
+- `valid_targets.pt` - Validation targets
+- `valid_mask.pt` - Validation masks
+
+**Equity Tables** (Located in `data/equity_tables/`):
+- `preflop_equity.json` - Preflop hand equity calculations
+
+**Verify Data:**
+```bash
+python scripts/validate_data.py
+```
+
+Expected output:
+```
+✓ Training samples validated
+✓ Equity table validated
+✓ All data files present and valid
+```
+
+### 3. Directory Structure
+
+The training pipeline will create:
+```
+pokerbot/
+├── models/              # Trained models
+│   ├── versions/       # Versioned models
+│   ├── checkpoints/    # Training checkpoints
+│   └── reports/        # Training reports
+├── logs/               # Training logs
+└── data/               # Training data (pre-existing)
+```
+
+---
+
+## System Architecture Overview
+
+### Unified PokerBot Agent
+
+The `PokerBotAgent` combines multiple AI techniques:
+
+**Components (All Configurable):**
+1. **CFR/CFR+** - Game-theoretic optimal play
+2. **DQN** - Deep Q-Network for pattern learning
+3. **DeepStack** - Continual re-solving with lookahead
+4. **Opponent Modeling** - Adaptive exploitation
+5. **Pre-trained Models** - Championship-level knowledge
+
+**Ensemble Decision Making:**
+- Each component votes on actions
+- Weighted voting system (configurable weights)
+- Final decision optimized through ensemble
+
+### Training Pipeline (3-Stage Progressive Training)
+
+**Stage 1: CFR Warmup** 
+- Trains game-theoretic foundation
+- Builds baseline strategy
+- No opponent interaction yet
+
+**Stage 2: Self-Play**
+- Agent plays against itself
+- DQN learns patterns through experience replay
+- Epsilon-greedy exploration
+
+**Stage 3: Vicarious Learning**
+- Agent plays against diverse opponents
+- Learns to exploit different play styles
+- Curriculum learning with progressive difficulty
+
+**Final: Evaluation & Comparison**
+- Evaluates against standard opponents
+- Compares with previous best model
+- Promotes if better
+
+---
+
+## Training Pipeline Stages
+
+### Stage 0: Data Validation
+
+**Purpose:** Ensure training data integrity
 
 **What happens:**
-- Stage 1: 100 CFR iterations (~30 seconds)
-- Stage 2: 50 self-play episodes (~2-3 minutes)
-- Stage 3: 50 vicarious learning episodes (~2-3 minutes)
-- Total time: ~5-7 minutes
+- Validates DeepStack training samples
+- Validates equity tables
+- Checks file formats and data consistency
 
-**Expected output:**
-```
-======================================================================
-CHAMPION AGENT PROGRESSIVE TRAINING PIPELINE
-======================================================================
-Mode: SMOKETEST
-Start time: 2024-01-15 10:30:00
+**Duration:** < 5 seconds
 
-STAGE 1: CFR WARMUP - Building game-theoretic foundation
-----------------------------------------------------------------------
-Training CFR component for 100 iterations...
-✓ CFR warmup complete
-  Total CFR iterations: 100
-  Information sets learned: 45
+**Failure:** Training stops if data is invalid
 
-STAGE 2: SELF-PLAY - Iterative self-improvement
-----------------------------------------------------------------------
-Self-play training for 50 episodes...
-  Episode 25/50 - Avg Reward: 12.45 - Win Rate: 52.00% - Epsilon: 0.285 - Memory: 124
-  Episode 50/50 - Avg Reward: 15.30 - Win Rate: 54.00% - Epsilon: 0.270 - Memory: 248
-✓ Self-play complete - Final win rate: 54.00%
+### Stage 1: CFR Warmup
 
-STAGE 3: VICARIOUS LEARNING - Learning from diverse opponents
-----------------------------------------------------------------------
-Vicarious learning for 50 episodes...
-  Episode 25/50 - Epsilon: 0.256
-    vs RANDOM: Win Rate 75.00%, Avg Reward 18.50
-    vs FIXED: Win Rate 62.50%, Avg Reward 12.30
-    vs CFR: Win Rate 48.00%, Avg Reward 5.20
-  Episode 50/50 - Epsilon: 0.243
-    vs RANDOM: Win Rate 74.00%, Avg Reward 19.10
-    vs FIXED: Win Rate 64.00%, Avg Reward 13.50
-    vs CFR: Win Rate 52.00%, Avg Reward 6.80
-✓ Vicarious learning complete
-
-FINAL EVALUATION
-----------------------------------------------------------------------
-Running final evaluation over 50 hands...
-  Evaluating vs EvalRandom...
-    Win Rate: 78.00%, Avg Reward: 21.45
-  Evaluating vs EvalFixed...
-    Win Rate: 66.00%, Avg Reward: 14.20
-  Evaluating vs EvalCFR...
-    Win Rate: 54.00%, Avg Reward: 7.30
-
-======================================================================
-TRAINING COMPLETE
-======================================================================
-Total time: 6.25 minutes
-Total episodes: 100
-Final model: models/champion_final
-======================================================================
-```
-
-### Step 2: Validate the Training
-
-After training completes, validate that the agent learned correctly:
-
-```bash
-python scripts/validate_training.py --model models/champion_final --hands 100
-```
-
-**Expected output:**
-```
-======================================================================
-CHAMPION AGENT VALIDATION
-======================================================================
-Model: models/champion_final
-Validation hands per opponent: 100
-
-TEST 1: Agent State Validation
-----------------------------------------------------------------------
-  Epsilon value: 0.2430 ✓
-  Memory size: 248 ✓
-  CFR iterations: 100 ✓
-  Information sets: 45 ✓
-  DQN model: Present ✓
-
-  Overall: PASSED ✓
-
-TEST 2: Performance Against Baseline Agents
-----------------------------------------------------------------------
-
-  Testing against random...
-    Win Rate: 76.00% ✓
-    Avg Reward: 20.15
-    Record: 76W - 24L
-
-  Testing against fixed...
-    Win Rate: 64.00% ✓
-    Avg Reward: 13.80
-    Record: 64W - 36L
-
-  Testing against cfr...
-    Win Rate: 52.00% ✓
-    Avg Reward: 6.50
-    Record: 52W - 48L
-
-  Testing against untrained_champion...
-    Win Rate: 58.00% ✓
-    Avg Reward: 9.20
-    Record: 58W - 42L
-
-TEST 3: Decision Consistency Check
-----------------------------------------------------------------------
-  Testing decision consistency with same game state...
-    Unique actions: 2
-    Consistency score: 90.00%
-    Status: ✓
-
-TEST 4: Memory & Learning Validation
-----------------------------------------------------------------------
-  Checking learning indicators...
-    Epsilon decay: 0.2430 ✓
-    Memory usage: 12.40% ✓
-    CFR convergence: 100 iterations ✓
-
-    Overall: PASSED ✓
-
-======================================================================
-VALIDATION SUMMARY
-======================================================================
-Tests Passed: 13/13 (100.0%)
-Status: EXCELLENT ✓✓✓
-======================================================================
-```
-
-### Step 3: Test the Trained Agent
-
-Now you can test your trained agent interactively:
-
-```python
-from src.agents import ChampionAgent
-from src.game import Card, Rank, Suit
-
-# Load trained agent
-agent = ChampionAgent(name="TrainedChampion", use_pretrained=False)
-agent.load_strategy("models/champion_final")
-
-# Test a decision
-hole_cards = [Card(Rank.ACE, Suit.SPADES), Card(Rank.KING, Suit.HEARTS)]
-community_cards = []
-pot = 100
-current_bet = 20
-player_stack = 1000
-
-action, raise_amt = agent.choose_action(
-    hole_cards, community_cards, pot,
-    current_bet, player_stack, current_bet
-)
-
-print(f"Agent decision: {action}, Raise: {raise_amt}")
-```
-
-## Full Production Training
-
-Once you've verified the smoketest works, you can run full production training:
-
-### Step 1: Run Full Training
-
-```bash
-python scripts/train_champion.py --mode full
-```
+**Purpose:** Build game-theoretic foundation
 
 **What happens:**
-- Stage 1: 5,000 CFR iterations (~10-15 minutes)
-- Stage 2: 2,000 self-play episodes (~45-60 minutes)
-- Stage 3: 3,000 vicarious learning episodes (~60-90 minutes)
-- Total time: ~2-3 hours
+- Runs CFR (Counterfactual Regret Minimization) iterations
+- Builds initial strategy through regret matching
+- No neural network training yet
 
-**Training will automatically:**
-- Save checkpoints every 500 episodes
-- Print progress every 100 episodes
-- Evaluate performance periodically
-- Generate comprehensive training reports
+**Configuration:**
+- Smoketest: 10 iterations
+- Standard: 200 iterations
+- Production: 5000 iterations
 
-### Step 2: Monitor Training Progress
+**Duration:**
+- Smoketest: ~10 seconds
+- Standard: ~2-3 minutes
+- Production: ~30-45 minutes
 
-The training script saves checkpoints at regular intervals. You can monitor progress by checking:
+**Output:** CFR strategy saved to checkpoints
 
-1. **Console output** - Real-time statistics
-2. **Model checkpoints** - Saved in `models/` directory
-3. **Training logs** - Saved in `logs/` directory
+### Stage 2: Self-Play
 
-### Step 3: Validate Full Training
+**Purpose:** Learn through experience
 
-After completion, validate with more hands:
+**What happens:**
+- Agent plays against copy of itself
+- Stores experiences in replay buffer
+- Trains DQN network on batches of experiences
+- Gradually reduces exploration (epsilon decay)
+
+**Configuration:**
+- Smoketest: 10 episodes
+- Standard: 100 episodes
+- Production: 2000 episodes
+
+**Duration:**
+- Smoketest: ~30 seconds
+- Standard: ~5-10 minutes
+- Production: ~2-4 hours
+
+**Metrics Tracked:**
+- Average reward
+- Win rate
+- Epsilon value (exploration rate)
+- Memory buffer size
+
+**Output:** Updated agent with learned patterns
+
+### Stage 3: Vicarious Learning
+
+**Purpose:** Learn to exploit different opponents
+
+**What happens:**
+- Agent plays against diverse opponents (Random, Fixed, CFR)
+- Extra optimization steps (2x replay per episode)
+- Curriculum learning (round-robin opponents)
+
+**Configuration:**
+- Smoketest: 10 episodes
+- Standard: 100 episodes
+- Production: 2000 episodes
+
+**Duration:**
+- Smoketest: ~30 seconds
+- Standard: ~5-10 minutes
+- Production: ~2-4 hours
+
+**Opponents:**
+- RandomAgent - Baseline random player
+- FixedStrategyAgent - GTO-inspired fixed strategy
+- CFRAgent - Pure CFR player
+
+**Output:** Robust agent that exploits weaknesses
+
+### Final Stage: Evaluation
+
+**Purpose:** Assess final performance
+
+**What happens:**
+- Agent set to evaluation mode (no exploration)
+- Plays validation hands against each opponent type
+- Calculates win rates and average rewards
+- Compares against previous best model
+- Promotes if better (>50% win rate vs. previous best)
+
+**Validation Hands:**
+- Smoketest: 10 hands per opponent
+- Standard: 50 hands per opponent
+- Production: 500 hands per opponent
+
+**Output:** 
+- Performance metrics saved to logs
+- Best model promoted if superior
+
+---
+
+## Quick Start: Smoketest
+
+**Purpose:** Verify entire pipeline works (1-2 minutes total)
+
+### Using PokerBot Agent (Recommended)
 
 ```bash
-python scripts/validate_training.py --model models/champion_final --hands 500
+# Train with unified PokerBot agent
+python scripts/train.py --agent-type pokerbot --mode smoketest --verbose
+
+# With custom iterations
+python scripts/train.py --agent-type pokerbot --mode smoketest --episodes 20 --verbose
 ```
 
-## Advanced Usage
-
-### Custom Training Parameters
+### Using Legacy Champion Agent
 
 ```bash
-# Custom number of episodes
-python scripts/train_champion.py --mode smoketest --episodes 200
-
-# Custom CFR iterations
-python scripts/train_champion.py --mode smoketest --cfr-iterations 500
-
-# Custom model directory
-python scripts/train_champion.py --mode smoketest --model-dir my_models/
-
-# Combine options
-python scripts/train_champion.py --mode full --episodes 5000 --cfr-iterations 10000
+# Train with legacy Champion agent (backward compatible)
+python scripts/train.py --mode smoketest --verbose
 ```
 
-### Resume from Checkpoint
+### Expected Output:
 
-If training is interrupted, resume from a checkpoint:
+```
+[INFO] Starting championship training pipeline with pokerbot agent
+[SAMPLES] Loaded train_inputs.pt: shape=(1000, 169), dtype=torch.float32, sum=84500.0
+[SAMPLES] Loaded train_mask.pt: shape=(1000, 169), dtype=torch.float32, sum=169000.0
+...
+[INFO] Stage 0: Validating data...
+✓ DeepStack samples validated
+✓ Equity table validated
+
+[INFO] Stage 1: CFR Warmup (10 iterations)...
+[OK] CFR training complete
+
+[INFO] Stage 2: Self-Play (10 episodes)...
+[Stage2] Ep 5/10 | AvgR 12.50 | Win 60.00% | Eps 0.095 | Mem 50
+[Stage2] Ep 10/10 | AvgR 15.30 | Win 70.00% | Eps 0.090 | Mem 100
+
+[INFO] Stage 3: Vicarious Learning (10 episodes)...
+[Stage3] Ep 5/10 | AvgR 18.20 | Win 60.00% | Eps 0.085 | Mem 150
+[Stage3] Ep 10/10 | AvgR 20.50 | Win 65.00% | Eps 0.080 | Mem 200
+
+[INFO] Final Evaluation...
+  vs EvalRandom: Win Rate 90.00%, Avg Reward 45.50
+  vs EvalFixed: Win Rate 70.00%, Avg Reward 25.30
+  vs EvalCFR: Win Rate 55.00%, Avg Reward 12.50
+
+[INFO] Comparing against previous best...
+  Previous best does not exist
+  Current model will be promoted to best
+
+[INFO] Saved metrics to logs/training_metrics.json
+[INFO] Champion training completed successfully
+```
+
+### Files Created:
+
+```
+models/
+├── checkpoints/
+│   └── champion_checkpoint.cfr
+│   └── champion_checkpoint.keras
+├── versions/
+│   └── champion_current.cfr
+│   └── champion_current.keras
+│   └── champion_best.cfr  (promoted)
+│   └── champion_best.keras  (promoted)
+└── reports/
+    └── (empty in smoketest)
+
+logs/
+└── training_metrics.json
+```
+
+---
+
+## Standard Training
+
+**Purpose:** Realistic training for strong agent (20-30 minutes total)
+
+**When to use:** Development, testing improvements, baseline performance
+
+### Command:
 
 ```bash
-python scripts/train_champion.py --mode full --resume models/champion_checkpoint_stage2_ep1000
+# Standard training with PokerBot
+python scripts/train.py --agent-type pokerbot --mode standard --verbose
+
+# With analysis report
+python scripts/train.py --agent-type pokerbot --mode standard --verbose --report
+
+# With custom seed for reproducibility
+python scripts/train.py --agent-type pokerbot --mode standard --seed 12345 --verbose
 ```
 
-### Analyzing Training Results
+### Configuration (Standard Mode):
 
-After training, several files are created:
+```json
+{
+  "stage1_cfr_iterations": 200,
+  "stage2_selfplay_episodes": 100,
+  "stage3_vicarious_episodes": 100,
+  "evaluation_interval": 10,
+  "save_interval": 20,
+  "batch_size": 8,
+  "validation_hands": 50
+}
+```
 
-1. **Model files:**
-   - `models/champion_final.cfr` - CFR strategy
-   - `models/champion_final.dqn` - DQN neural network
-   - `models/champion_final_metadata.json` - Training metadata
+### Timeline:
 
-2. **Training report:**
-   - `logs/training_report_YYYYMMDD_HHMMSS.txt` - Comprehensive report
+| Stage | Duration | Purpose |
+|-------|----------|---------|
+| Stage 1 (CFR) | ~2-3 min | Game theory foundation |
+| Stage 2 (Self-play) | ~5-10 min | Pattern learning |
+| Stage 3 (Vicarious) | ~5-10 min | Exploitation learning |
+| Evaluation | ~2-5 min | Performance assessment |
+| **Total** | **~20-30 min** | |
 
-3. **Validation results:**
-   - `models/champion_final_validation.json` - Validation metrics
+### Expected Performance:
 
-View the training report:
+Against RandomAgent: **85-95% win rate**
+Against FixedStrategyAgent: **65-75% win rate**
+Against CFRAgent: **50-60% win rate**
+
+### Monitoring Progress:
+
+The `--verbose` flag provides real-time updates:
+- Episode number and progress
+- Average reward (last N episodes)
+- Win rate
+- Epsilon value (exploration)
+- Memory buffer size
+
+**Example:**
+```
+[Stage2] Ep 50/100 | AvgR 18.50 | Win 68.00% | Eps 0.050 | Mem 400
+```
+
+---
+
+## Production Training
+
+**Purpose:** Championship-level agent training (4-8 hours total)
+
+**When to use:** Final model for competition, deployment, serious play
+
+### Command:
+
 ```bash
-cat logs/training_report_*.txt
+# Full production training
+python scripts/train.py \
+  --agent-type pokerbot \
+  --mode production \
+  --verbose \
+  --report \
+  --seed 42
+
+# With optimization export (pruning and quantization)
+python scripts/train.py \
+  --agent-type pokerbot \
+  --mode production \
+  --verbose \
+  --report \
+  --optimize-export
 ```
 
-View validation results:
+### Configuration (Production Mode):
+
+```json
+{
+  "stage1_cfr_iterations": 5000,
+  "stage2_selfplay_episodes": 2000,
+  "stage3_vicarious_episodes": 2000,
+  "evaluation_interval": 100,
+  "save_interval": 500,
+  "batch_size": 32,
+  "validation_hands": 500
+}
+```
+
+### Timeline:
+
+| Stage | Duration | Purpose |
+|-------|----------|---------|
+| Stage 1 (CFR) | ~30-45 min | Deep game theory |
+| Stage 2 (Self-play) | ~2-4 hours | Advanced patterns |
+| Stage 3 (Vicarious) | ~2-4 hours | Exploit mastery |
+| Evaluation | ~15-30 min | Comprehensive testing |
+| **Total** | **~4-8 hours** | |
+
+### Expected Championship Performance:
+
+Against RandomAgent: **95-99% win rate**
+Against FixedStrategyAgent: **75-85% win rate**
+Against CFRAgent: **55-65% win rate**
+Against Previous Best: **>50% win rate** (required for promotion)
+
+### Advanced Options:
+
+**Custom Iterations:**
 ```bash
-cat models/champion_final_validation.json
+# Override specific stages
+python scripts/train.py \
+  --agent-type pokerbot \
+  --mode production \
+  --cfr-iterations 10000 \
+  --episodes 5000 \
+  --batch-size 64
 ```
 
-## Understanding the Metrics
+**Resume Training:**
+```bash
+# Automatically resumes from best model if exists
+python scripts/train.py --agent-type pokerbot --mode production
+```
 
-### Training Metrics
+**Model Optimization:**
+```bash
+# Prune and quantize for deployment
+python scripts/train.py \
+  --agent-type pokerbot \
+  --mode production \
+  --optimize-export
+```
 
-- **Epsilon**: Exploration rate (decreases over time as agent learns)
-- **Win Rate**: Percentage of hands won
-- **Avg Reward**: Average chips won/lost per hand
-- **Memory**: Number of experiences stored for learning
+This creates:
+- `champion_current_pruned.keras` - Pruned model (50% sparsity)
+- `champion_current.tflite` - TensorFlow Lite model (quantized)
 
-### Validation Metrics
+---
 
-- **Win Rate vs Baseline**: Should be >50% against most agents
-- **Consistency Score**: Should be >50% (higher = more consistent decisions)
-- **Memory Usage**: Should be >10% after training
-- **CFR Convergence**: Number of CFR iterations completed
+## Model Evaluation
 
-### Success Criteria
+### Post-Training Validation
 
-A successfully trained agent should have:
-- ✓ Win rate >70% vs Random agents
-- ✓ Win rate >60% vs Fixed strategy agents  
-- ✓ Win rate >45% vs CFR agents
-- ✓ Epsilon <0.3 (has learned to exploit knowledge)
-- ✓ Memory >100 experiences
-- ✓ CFR iterations >50
+After training completes, validate your model:
+
+```bash
+# Validate trained model
+python scripts/validate_training.py --model models/versions/champion_best --hands 500
+
+# Compare models
+python scripts/test_model_comparison.py \
+  --model1 models/versions/champion_best \
+  --model2 models/versions/champion_current \
+  --hands 1000
+```
+
+### Testing Against Specific Opponents:
+
+```bash
+# Interactive testing
+python scripts/play.py --agent pokerbot --opponent random
+python scripts/play.py --agent pokerbot --opponent cfr
+```
+
+### Performance Metrics:
+
+Check training metrics:
+```bash
+cat logs/training_metrics.json
+```
+
+Key metrics to review:
+- `training_rewards` - Reward progression over episodes
+- `win_rates` - Win rate progression
+- `epsilon_values` - Exploration decay
+- `episode_reward_mean` - Average reward per evaluation interval
+
+### Visualize Strategy:
+
+```bash
+# Generate strategy visualization
+python scripts/visualize_strategy.py \
+  --model models/versions/champion_best \
+  --output models/reports/strategy_viz.png
+```
+
+---
 
 ## Troubleshooting
 
-### Issue: "No module named 'tensorflow'"
+### Common Issues
+
+#### 1. Data Validation Fails
+
+**Error:** `ValueError: DeepStacked training samples failed validation`
 
 **Solution:**
 ```bash
-pip install tensorflow
+# Check data files exist
+ls -l data/deepstacked_training/samples/train_samples/
+ls -l data/equity_tables/
+
+# Regenerate if needed
+python scripts/verify_pt_samples.py
+python scripts/validate_data.py
 ```
 
-### Issue: Training is very slow
+#### 2. Out of Memory
 
-**Solutions:**
-- Use smoketest mode for faster validation
-- Reduce number of episodes: `--episodes 100`
-- Ensure TensorFlow is using CPU efficiently (GPU not required)
+**Error:** `RuntimeError: CUDA out of memory` or similar
 
-### Issue: Agent performs poorly after training
-
-**Possible causes:**
-1. Training interrupted too early
-2. Insufficient episodes
-3. Check validation results for specific weaknesses
-
-**Solutions:**
-- Run full training mode (not smoketest)
-- Increase episodes: `--episodes 5000`
-- Validate and check which opponents are problematic
-
-### Issue: Memory errors during training
-
-**Solutions:**
-- Reduce batch size in code (default: 32)
-- Close other applications
-- Use smaller CFR iterations
-
-### Issue: Checkpoint files not found
-
-**Check:**
+**Solution:**
 ```bash
-ls -la models/
+# Reduce batch size
+python scripts/train.py --agent-type pokerbot --mode standard --batch-size 4
+
+# Or use CPU only
+python scripts/train.py --agent-type pokerbot --mode standard
 ```
 
-Should see files like:
-- `champion_final.cfr`
-- `champion_final.dqn`
-- `champion_final_metadata.json`
+#### 3. Import Errors
 
-If missing, training may have failed. Check console output for errors.
+**Error:** `ModuleNotFoundError: No module named 'tensorflow'`
 
-## Best Practices
-
-### 1. Always Start with Smoketest
-
-Run smoketest mode first to verify everything works:
+**Solution:**
 ```bash
-python scripts/train_champion.py --mode smoketest
+# Reinstall dependencies
+pip install -r requirements.txt
+
+# Verify
+python -c "import tensorflow, torch; print('OK')"
 ```
 
-### 2. Validate After Training
+#### 4. Training Hangs
 
-Always validate to ensure training was effective:
+**Symptom:** Training stops making progress
+
+**Solution:**
+- Check system resources (CPU, memory)
+- Reduce episode count or batch size
+- Use Ctrl+C to interrupt, model saved at last checkpoint
+- Resume with same command
+
+#### 5. Poor Performance
+
+**Symptom:** Low win rates after training
+
+**Checklist:**
+- ✓ Used production mode? (Standard is not championship-level)
+- ✓ Trained for full duration? (Don't interrupt)
+- ✓ Data validation passed?
+- ✓ Sufficient iterations? (Check config)
+
+**Solution:**
 ```bash
-python scripts/validate_training.py --model models/champion_final
+# Run production training
+python scripts/train.py --agent-type pokerbot --mode production --verbose
+
+# Or increase iterations
+python scripts/train.py \
+  --agent-type pokerbot \
+  --mode production \
+  --cfr-iterations 10000 \
+  --episodes 5000
 ```
 
-### 3. Save Multiple Checkpoints
+---
 
-Keep checkpoints from different stages:
+## Next Steps: Vision System
+
+Once you have a trained championship-level PokerBot agent, you can proceed to integrate the vision/perception system for end-to-end automated play.
+
+### Vision System Overview
+
+**Components:**
+1. **Screen Capture** - Captures poker client window
+2. **Game State Detection** - Uses GPT-4 Vision API to parse game state
+3. **Action Execution** - PyAutoGUI to execute actions
+4. **Control Loop** - Coordinates everything
+
+### Integration Steps:
+
+#### 1. Verify Trained Agent
+
 ```bash
-# Stage 2 checkpoint
-models/champion_checkpoint_stage2_ep1000.cfr
-
-# Stage 3 checkpoint  
-models/champion_checkpoint_stage3_ep2000.cfr
-
-# Final model
-models/champion_final.cfr
+# Test agent in isolation
+python examples/test_pokerbot.py
+python examples/validate_pokerbot.py
 ```
 
-### 4. Compare Performance
+Expected: All tests passing ✓
 
-Compare trained vs untrained agents:
-```python
-from src.agents import ChampionAgent
-from src.evaluation import Evaluator
+#### 2. Configure Vision System
 
-# Load agents
-trained = ChampionAgent(name="Trained", use_pretrained=False)
-trained.load_strategy("models/champion_final")
-
-untrained = ChampionAgent(name="Untrained", use_pretrained=False)
-
-# Evaluate
-evaluator = Evaluator([trained, untrained])
-results = evaluator.evaluate_agents(num_hands=100)
+Create `.env` file:
+```env
+OPENAI_API_KEY=your_api_key_here
+SCREEN_REGION_X=0
+SCREEN_REGION_Y=0
+SCREEN_REGION_WIDTH=1920
+SCREEN_REGION_HEIGHT=1080
 ```
 
-### 5. Monitor System Resources
+#### 3. Test Vision Components
 
-During full training, monitor:
-- CPU usage (should be 50-100%)
-- Memory usage (should be <4GB)
-- Disk space (need ~1GB free)
-
-## Next Steps
-
-After successful training:
-
-1. **Integrate into your application** - Use the trained agent in your poker bot
-2. **Continue training** - Resume and train for more episodes
-3. **Experiment with opponents** - Create custom opponents for specialized training
-4. **Tune hyperparameters** - Adjust learning rates, epsilon decay, etc.
-5. **Benchmark performance** - Test against other poker AIs
-
-## Frequently Asked Questions
-
-### Q: How long does training take?
-
-**A:** 
-- Smoketest: 5-7 minutes
-- Full training: 2-3 hours
-
-### Q: Can I train on CPU only?
-
-**A:** Yes! The pipeline works fine on CPU. GPU is not required.
-
-### Q: How much improvement should I expect?
-
-**A:** A successfully trained agent should:
-- Beat random agents 75%+ of the time
-- Beat fixed strategy agents 60%+ of the time
-- Beat CFR agents 50%+ of the time (competitive)
-
-### Q: Can I interrupt and resume training?
-
-**A:** Yes! Use Ctrl+C to stop, then resume:
 ```bash
-python scripts/train_champion.py --resume models/champion_checkpoint_stage2_ep500
+# Test screen capture
+python -c "
+from src.vision import capture_screen
+img = capture_screen()
+print(f'Captured: {img.size}')
+"
+
+# Test game state detection
+python scripts/test_vision.py --screenshot test_poker_table.png
 ```
 
-### Q: What if validation fails?
+#### 4. Run End-to-End System
 
-**A:** Check:
-1. Training completed successfully (no errors)
-2. Model files exist in `models/` directory
-3. Run full training instead of smoketest
-4. Increase training episodes
+```bash
+# Interactive mode (manual confirmation)
+python scripts/play.py --agent pokerbot --vision --interactive
 
-### Q: How do I know if my agent is learning?
+# Automated mode (full automation)
+python scripts/play.py --agent pokerbot --vision --auto
+```
 
-**A:** Look for:
-- Decreasing epsilon values
-- Increasing win rates over time
-- Growing memory size
-- Positive performance in validation
+### Safety Measures:
 
-## Support
+**IMPORTANT:** When running automated play:
 
-If you encounter issues:
+1. **Test Mode First:** Always test with play money or test accounts
+2. **Monitor Carefully:** Watch the first 100+ hands
+3. **Set Limits:** Configure stop-loss and time limits
+4. **Emergency Stop:** Keep Ctrl+C ready to interrupt
 
-1. Check this guide's Troubleshooting section
-2. Review console output for error messages
-3. Verify all dependencies are installed
-4. Try smoketest mode first
-5. Check validation results for specific issues
+### Vision System Architecture:
 
-## Summary
+```
+PokerBot End-to-End System:
+┌─────────────────────────────────────┐
+│ 1. Screen Capture (pyautogui)      │
+│    ├─ Captures poker table         │
+│    └─ Preprocesses image           │
+└────────────┬────────────────────────┘
+             │
+┌────────────▼────────────────────────┐
+│ 2. GPT-4 Vision API                 │
+│    ├─ Detects cards                │
+│    ├─ Reads pot size               │
+│    ├─ Identifies bets              │
+│    └─ Parses game state            │
+└────────────┬────────────────────────┘
+             │
+┌────────────▼────────────────────────┐
+│ 3. PokerBot Agent (Trained Model)   │
+│    ├─ Processes game state         │
+│    ├─ CFR/DQN/DeepStack decision   │
+│    └─ Returns optimal action       │
+└────────────┬────────────────────────┘
+             │
+┌────────────▼────────────────────────┐
+│ 4. Action Execution (pyautogui)     │
+│    ├─ Clicks buttons               │
+│    ├─ Enters bet amounts           │
+│    └─ Confirms actions             │
+└─────────────────────────────────────┘
+```
 
-**Quick Start Checklist:**
-- [ ] Install dependencies (`pip install numpy tensorflow`)
-- [ ] Run smoketest (`python scripts/train_champion.py --mode smoketest`)
-- [ ] Validate training (`python scripts/validate_training.py --model models/champion_final`)
-- [ ] Review results (check win rates and metrics)
-- [ ] Run full training if smoketest succeeds
-- [ ] Test your trained agent in action!
+### Development Workflow:
 
-**You're now ready to train a championship-level poker AI! 🏆**
+```bash
+# Phase 1: Agent Training (COMPLETED with this guide)
+python scripts/train.py --agent-type pokerbot --mode production
+
+# Phase 2: Vision Testing (NEXT)
+python scripts/test_vision.py
+python scripts/calibrate_screen.py
+
+# Phase 3: Integration Testing
+python scripts/play.py --agent pokerbot --vision --interactive
+
+# Phase 4: Live Testing (Careful!)
+python scripts/play.py --agent pokerbot --vision --auto --test-mode
+
+# Phase 5: Production Deployment
+python scripts/play.py --agent pokerbot --vision --auto
+```
+
+---
+
+## Additional Resources
+
+### Testing Scripts:
+
+```bash
+# Test complete pipeline (no training)
+python scripts/test_training_pipeline.py
+
+# Profile performance
+python scripts/profile_performance.py
+
+# Monitor resources during training
+python scripts/monitor_resources.py &
+python scripts/train.py --agent-type pokerbot --mode production
+
+# Hyperparameter tuning (Optuna)
+python scripts/tune_hyperparams.py --trials 50
+```
+
+### Configuration Files:
+
+- `scripts/config/smoketest.json` - Fast testing (1-2 min)
+- `scripts/config/standard.json` - Development (20-30 min)
+- `scripts/config/production.json` - Championship (4-8 hours)
+- `scripts/config/training.json` - Custom template
+
+### Documentation:
+
+- `README.md` - Project overview
+- `docs/MIGRATION_GUIDE.md` - Agent migration guide
+- `docs/IMPLEMENTATION_SUMMARY.md` - Technical details
+- `docs/IMPORT_UPDATE_SUMMARY.md` - Import changes
+
+---
+
+## Quick Reference
+
+### Essential Commands:
+
+```bash
+# Smoketest (1-2 min)
+python scripts/train.py --agent-type pokerbot --mode smoketest --verbose
+
+# Standard training (20-30 min)
+python scripts/train.py --agent-type pokerbot --mode standard --verbose --report
+
+# Production training (4-8 hours)
+python scripts/train.py --agent-type pokerbot --mode production --verbose --report --optimize-export
+
+# Validate model
+python scripts/validate_training.py --model models/versions/champion_best --hands 500
+
+# Test agent
+python examples/test_pokerbot.py
+```
+
+### Training Modes Comparison:
+
+| Mode | CFR Iter | Episodes | Duration | Purpose |
+|------|----------|----------|----------|---------|
+| Smoketest | 10 | 10 + 10 | 1-2 min | Testing pipeline |
+| Standard | 200 | 100 + 100 | 20-30 min | Development |
+| Production | 5000 | 2000 + 2000 | 4-8 hours | Championship |
+
+### File Locations:
+
+- Models: `models/versions/champion_best.*`
+- Checkpoints: `models/checkpoints/`
+- Logs: `logs/training_metrics.json`
+- Data: `data/deepstacked_training/`, `data/equity_tables/`
+- Config: `scripts/config/*.json`
+
+---
+
+## Success Checklist
+
+Before proceeding to vision system:
+
+- [ ] All tests pass: `python examples/test_pokerbot.py`
+- [ ] Smoketest completes successfully
+- [ ] Standard training achieves >65% win rate vs Fixed
+- [ ] Production training achieves >75% win rate vs Fixed
+- [ ] Model saves correctly to `models/versions/champion_best.*`
+- [ ] Validation script confirms performance
+- [ ] Ready to integrate vision system
+
+---
+
+## Support and Contributing
+
+For issues, questions, or contributions:
+- Create an issue on GitHub
+- Review existing documentation in `docs/`
+- Check troubleshooting section above
+
+---
+
+**Training Your Championship PokerBot - Summary:**
+
+1. ✓ Verify prerequisites (data, dependencies)
+2. ✓ Run smoketest to verify pipeline
+3. ✓ Run standard training for development
+4. ✓ Run production training for championship model
+5. ✓ Validate and evaluate your model
+6. ✓ Proceed to vision system integration
+
+**You are now ready to train a world-class PokerBot agent!**
