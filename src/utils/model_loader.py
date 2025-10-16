@@ -17,7 +17,7 @@ import numpy as np
 class ModelLoader:
     """Loads and manages pre-trained poker models."""
     
-    def __init__(self, models_dir: str = "models/pretrained"):
+    def __init__(self, models_dir: str = "models/versions"):
         """
         Initialize model loader.
         

@@ -4,7 +4,7 @@ import torch
 import sys
 import os
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'src')))
-from deepstack.core.deepstack_trainer import DeepStackTrainer
+from src.deepstack.evaluation.trainer import UnifiedTrainer
 from deepstack.core.data_stream import DataStream
 import json
 
@@ -42,7 +42,7 @@ print('Best hyperparameters:', study.best_params)
 # Ensemble/meta-learning entry point (placeholder)
 def run_ensemble(net_class, epochs):
     # Example: load multiple best models and average predictions
-    model_paths = [f"models/pretrained/epoch_{i}.pt" for i in range(1, epochs+1)]
+    model_paths = [f"models/versions/epoch_{i}.pt" for i in range(1, epochs+1)]
     models = []
     for path in model_paths:
         if os.path.exists(path):

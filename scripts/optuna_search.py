@@ -22,12 +22,13 @@ def objective(trial):
         "bet_sizing": bet_sizing,
         "hidden_sizes": hidden_sizes,
         "activation": activation,
-        "data_path": "../data/deepstacked_training/samples/train_samples",
+        "data_path": "../src/train_samples",
         "batch_size": batch_size,
-        "use_gpu": False,
+        "use_gpu": True,
         "lr": lr,
-        "epochs": epochs,
-        "model_save_dir": "models/pretrained"
+    "epochs": epochs,
+    "versions_dir": "models/versions",
+    "checkpoint_dir": "models/checkpoints"
     }
     with open('scripts/config/training.json', 'w') as f:
         json.dump(config, f, indent=2)

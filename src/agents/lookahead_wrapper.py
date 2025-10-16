@@ -54,7 +54,6 @@ class DeepStackLookahead:
             self.bet_sizing = [1.0]
 
     # ------------------------------------------------------------------
-    # Legacy interface methods used by ChampionAgent and tests
     # ------------------------------------------------------------------
     def build_lookahead(self, street: int, current_player: int,
                         community_cards: Sequence[Any]) -> None:

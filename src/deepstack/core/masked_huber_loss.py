@@ -25,7 +25,7 @@ class MaskedHuberLoss(nn.Module):
     Used in DeepStack to handle variable number of actions.
     """
     
-    def __init__(self, delta=1.0):
+    def __init__(self, delta=1.0, normalize_by_valid_fraction: bool = True):
         """
         Initialize masked Huber loss.
         
@@ -34,6 +34,7 @@ class MaskedHuberLoss(nn.Module):
         """
         super().__init__()
         self.delta = delta
+        self.normalize_by_valid_fraction = normalize_by_valid_fraction
     
     def forward(self, y_pred, y_true, mask):
         """
@@ -57,5 +58,16 @@ class MaskedHuberLoss(nn.Module):
         
         # Apply mask and compute mean
         masked_loss = loss * mask
-        return torch.sum(masked_loss) / (torch.sum(mask) + 1e-8)
+        denom = torch.sum(mask) + 1e-8
+        if self.normalize_by_valid_fraction:
+            # Normalize by fraction of valid outputs to keep gradient scale stable across streets
+            B, D = mask.shape
+            valid_per_sample = torch.sum(mask, dim=1) + 1e-8
+            frac = valid_per_sample / float(D)
+            # Weight each sample loss by 1/frac to maintain consistent scale
+            sample_loss = torch.sum(masked_loss, dim=1) / valid_per_sample
+            scaled = sample_loss / (frac + 1e-8)
+            return torch.mean(scaled)
+        else:
+            return torch.sum(masked_loss) / denom
 

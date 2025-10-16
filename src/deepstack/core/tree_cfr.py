@@ -8,6 +8,7 @@ After 1000 iterations on tutorial trees, exploitability should be ~1.0 chips.
 """
 import numpy as np
 from typing import List, Optional, Dict
+from .terminal_equity import TerminalEquity
 
 
 class TreeCFR:
@@ -25,7 +26,8 @@ class TreeCFR:
     Reference: "Regret Minimization in Games with Incomplete Information" (Zinkevich et al.)
     """
     
-    def __init__(self, skip_iterations: int = 0, use_linear_cfr: bool = True, use_cfr_plus: bool = True):
+    def __init__(self, skip_iterations: int = 0, use_linear_cfr: bool = True, use_cfr_plus: bool = True,
+                 terminal_equity: Optional[TerminalEquity] = None):
         """
         Initialize TreeCFR solver.
         
@@ -38,6 +40,7 @@ class TreeCFR:
         self.use_linear_cfr = use_linear_cfr
         self.use_cfr_plus = use_cfr_plus
         self.iteration = 0
+        self.terminal_equity = terminal_equity or TerminalEquity(game_variant='holdem', num_hands=169)
         
         # Storage for regrets and strategies per node
         self.regrets = {}  # node_id -> action regrets
@@ -71,6 +74,8 @@ class TreeCFR:
         
         # Initialize regrets and strategies
         self._initialize_tree(root)
+        # Per-run cache for terminal call CFVs keyed by board
+        self._call_cache = {}
         
         # Run CFR iterations
         for i in range(iter_count):
@@ -294,16 +299,61 @@ class TreeCFR:
             Payoff vector for player's range
         """
         num_hands = ranges.shape[1]
-        
-        # Simple placeholder - in production, use actual showdown/fold equity
-        # For now, return uniform small payoffs
+        # Set terminal equity board context if available
+        try:
+            board = getattr(node, 'board', None)
+            if board is not None:
+                self.terminal_equity.set_board(board)
+        except Exception:
+            pass
+
+        # Terminal fold or call handling using TerminalEquity
         if hasattr(node, 'node_type') and 'fold' in str(node.node_type).lower():
-            # Fold node - fixed payoff
-            return np.ones(num_hands) * (node.pot if hasattr(node, 'pot') else 100)
+            result = [np.zeros(num_hands), np.zeros(num_hands)]
+            folding_player = 0
+            # current_player in nodes is 1/2 for P1/P2
+            try:
+                cp = getattr(node, 'current_player', 1)
+                folding_player = 0 if int(cp) == 1 else 1
+            except Exception:
+                folding_player = 0
+            self.terminal_equity.tree_node_fold_value(ranges, result, folding_player)
+            # Scale by pot if present
+            pot = getattr(node, 'pot', 1.0) or 1.0
+            result[0] = result[0] * pot
+            result[1] = result[1] * pot
+            return result[player]
         else:
-            # Showdown - would use hand strength evaluation
-            # Placeholder: zero-sum random outcome
-            return np.random.randn(num_hands) * 10
+            # Cache call-node CFVs per board for current ranges
+            key = tuple(board) if isinstance(board, list) else board
+            cached = self._call_cache.get(key)
+            if cached is None:
+                base = [np.zeros(num_hands), np.zeros(num_hands)]
+                self.terminal_equity.tree_node_call_value(ranges, base)
+                self._call_cache[key] = (base[0].copy(), base[1].copy())
+                cached = self._call_cache[key]
+            # Scale by pot if present
+            pot = getattr(node, 'pot', 1.0) or 1.0
+            return (cached[player] * pot)
+
+    # Evaluation without updating regrets using current/average strategies
+    def evaluate_cfv(self, node, ranges: np.ndarray, player: int, node_id: str = "root") -> np.ndarray:
+        """Compute CFV vector for the given player using current strategy snapshot.
+        Does not update regrets; uses regret-matched strategy or uniform if absent.
+        """
+        if not hasattr(node, 'children') or not node.children:
+            return self._evaluate_terminal(node, ranges, player)
+        # Get strategy based on current regrets (or uniform)
+        strategy = self._get_strategy(node_id)
+        num_hands = ranges.shape[1]
+        num_actions = len(node.children)
+        action_cfvs = np.zeros((num_actions, num_hands))
+        for action_idx, child in enumerate(node.children):
+            child_id = f"{node_id}_a{action_idx}"
+            action_cfvs[action_idx] = self.evaluate_cfv(child, ranges, player, child_id)
+        # Strategy-weighted sum
+        node_cfv = np.dot(strategy, action_cfvs)
+        return node_cfv
     
     def update_average_strategy(self, node, current_strategy, iter):
         """

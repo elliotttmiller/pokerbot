@@ -135,8 +135,7 @@ data/unified_training_data.json
 *.pickle
 
 # Keep pre-trained models from champion projects
-!models/pretrained/*.model
-!models/pretrained/*.info
+# models/pretrained deprecated; all models now under models/versions
 !data/equity_tables/*.json
 !models/README.md
 

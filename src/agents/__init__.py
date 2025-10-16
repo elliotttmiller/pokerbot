@@ -10,7 +10,6 @@ from .pokerbot_agent import PokerBotAgent
 
 
 
-# Legacy agents (ChampionAgent, EliteUnifiedAgent) are deprecated and not imported directly.
 # Use create_agent('champion') or create_agent('elite') for legacy agent instantiation.
 
 __all__ = [

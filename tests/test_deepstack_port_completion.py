@@ -19,11 +19,19 @@ import numpy as np
 import os
 import sys
 
-# Add src to path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
-
-from deepstack.core.tree_builder import PokerTreeBuilder, PokerTreeNode
+from dotenv import load_dotenv
+load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), '..', '.env'))
+pythonpath = os.environ.get("PYTHONPATH")
+if pythonpath:
+    for p in pythonpath.split(os.pathsep):
+        if p and p not in sys.path:
+            sys.path.insert(0, p)
+# Fallback: always add src path directly
+src_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'src'))
+if src_path not in sys.path:
+    sys.path.insert(0, src_path)
 from deepstack.core.lookahead import Lookahead, LookaheadBuilder
+from deepstack.core.tree_builder import PokerTreeBuilder
 from deepstack.core.terminal_equity import TerminalEquity
 from deepstack.core.cfrd_gadget import CFRDGadget
 from deepstack.core.tree_cfr import TreeCFR
@@ -276,19 +284,6 @@ class TestIntegration:
         
         print(f"✓ End-to-end solve successful: {len(actions)} actions")
     
-    def test_champion_agent_integration(self):
-        """Test that champion agent can use DeepStack."""
-        try:
-            from src.agents.champion_agent import ChampionAgent
-            
-            # This is a smoke test - just verify agent can be instantiated
-            # Full integration would require game environment
-            agent = ChampionAgent(name="TestChampion", use_pretrained=False)
-            assert agent is not None, "Champion agent should initialize"
-            
-            print("✓ Champion agent integration check passed")
-        except ImportError as e:
-            print(f"⚠ Skipping champion agent test (import error): {e}")
     
     def test_tree_cfr_full_solve(self):
         """Test full-tree CFR solver."""

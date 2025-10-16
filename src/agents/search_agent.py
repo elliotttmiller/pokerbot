@@ -8,12 +8,12 @@ Implements two-stage approach from Pluribus:
 from typing import List, Optional, Tuple
 import numpy as np
 
-from deepstack.game.game_state import Action, GameState
-from deepstack.game.card import Card
-from .champion_agent import ChampionAgent
+from src.deepstack.game.game_state import Action, GameState
+from src.deepstack.game.card import Card
+from src.agents.pokerbot_agent import PokerBotAgent
 
 
-class SearchAgent(ChampionAgent):
+class SearchAgent(PokerBotAgent):
     """
     Champion Agent enhanced with real-time search capabilities.
     
@@ -35,7 +35,7 @@ class SearchAgent(ChampionAgent):
             search_depth: Maximum depth for real-time search
             search_threshold_pot: Minimum pot size to trigger search
             use_pretrained: Load pre-trained models
-            **kwargs: Additional args for ChampionAgent
+            **kwargs: Additional args for PokerBotAgent
         """
         super().__init__(name=name, use_pretrained=use_pretrained, **kwargs)
         self.search_depth = search_depth

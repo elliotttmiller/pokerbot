@@ -28,6 +28,7 @@ class TerminalEquity:
         self.game_variant = game_variant
         self.num_hands = num_hands
         self.board = None
+        self._last_board_key = None  # cache key to avoid recompute
         self.call_matrix = None
         self.fold_matrix = None
 
@@ -38,7 +39,12 @@ class TerminalEquity:
         Args:
             board: List of board cards
         """
+        # Create a simple cache key that works for our placeholder board format
+        key = tuple(board) if isinstance(board, list) else board
+        if self._last_board_key == key and self.call_matrix is not None and self.fold_matrix is not None:
+            return  # unchanged board; reuse matrices
         self.board = board
+        self._last_board_key = key
         self._compute_equity_matrices()
 
     def _compute_equity_matrices(self):
@@ -119,14 +125,12 @@ class TerminalEquity:
         Uses hand strength approximation based on bucket indices.
         In production, would use Monte Carlo simulation or lookup tables.
         """
-        for i in range(self.num_hands):
-            for j in range(self.num_hands):
-                if i == j:
-                    self.call_matrix[i][j] = 0.5  # Split pot
-                else:
-                    # Approximate: higher bucket = stronger hand
-                    equity = 0.5 + 0.3 * (i - j) / self.num_hands
-                    self.call_matrix[i][j] = np.clip(equity, 0.0, 1.0)
+        # Vectorized computation for speed
+        idx = np.arange(self.num_hands, dtype=np.float32)
+        diff = idx[:, None] - idx[None, :]
+        equity = 0.5 + 0.3 * (diff / float(self.num_hands))
+        self.call_matrix[:, :] = np.clip(equity, 0.0, 1.0)
+        # Diagonal split pot (already 0.5 by construction)
 
     def _get_card_rank(self, card) -> int:
         """

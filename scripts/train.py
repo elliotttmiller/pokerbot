@@ -32,13 +32,13 @@ print(f"[DEBUG] PYTHONPATH from .env: {pythonpath}")
 print(f"[DEBUG] src_path resolved: {src_path}")
 print(f"[DEBUG] sys.path: {sys.path}")
 
-from utils import Logger
-from agents import create_agent, PokerBotAgent
-from deepstack.game import Card, GameState, Action
-from utils.data_validation import validate_deepstacked_samples, validate_equity_table
-from agents.random_agent import RandomAgent
-from agents.fixed_strategy_agent import FixedStrategyAgent
-from agents.cfr_agent import CFRAgent
+from src.utils import Logger
+from src.agents import create_agent, PokerBotAgent
+from src.deepstack.game import Card, GameState, Action
+from src.utils.data_validation import validate_deepstacked_samples, validate_equity_table
+from src.agents.random_agent import RandomAgent
+from src.agents.fixed_strategy_agent import FixedStrategyAgent
+from src.agents.cfr_agent import CFRAgent
 import torch
 
 class TrainingConfig:

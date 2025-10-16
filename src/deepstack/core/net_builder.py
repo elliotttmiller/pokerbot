@@ -6,9 +6,11 @@ import torch
 import torch.nn as nn
 
 class NetBuilder(nn.Module):
-    def __init__(self, num_buckets, hidden_sizes=[128, 128], activation='relu', use_gpu=False):
+    def __init__(self, num_buckets, hidden_sizes=[128, 128], activation='relu', use_gpu=False, input_size: int | None = None):
         super().__init__()
-        input_size = 2 * num_buckets + 1  # [{p1_range}, {p2_range}, pot_size]
+        # Default input layout: [{p1_range}, {p2_range}, pot_size]
+        inferred_input = 2 * num_buckets + 1
+        input_size = int(input_size) if input_size is not None else inferred_input
         output_size = 2 * num_buckets     # [{p1_cfvs}, {p2_cfvs}]
         layers = []
         last_size = input_size
@@ -28,5 +30,5 @@ class NetBuilder(nn.Module):
         return self.model(x)
 
     @staticmethod
-    def build_net(num_buckets, hidden_sizes=[128, 128], activation='relu', use_gpu=False):
-        return NetBuilder(num_buckets, hidden_sizes, activation, use_gpu)
+    def build_net(num_buckets, hidden_sizes=[128, 128], activation='relu', use_gpu=False, input_size: int | None = None):
+        return NetBuilder(num_buckets, hidden_sizes, activation, use_gpu, input_size)

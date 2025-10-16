@@ -11,8 +11,17 @@ Usage:
 
 import os
 import sys
-# Ensure parent directory is in sys.path for src imports
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+from dotenv import load_dotenv
+load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), '..', '.env'))
+pythonpath = os.environ.get("PYTHONPATH")
+if pythonpath:
+    for p in pythonpath.split(os.pathsep):
+        if p and p not in sys.path:
+            sys.path.insert(0, p)
+# Fallback: always add src path directly
+src_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'src'))
+if src_path not in sys.path:
+    sys.path.insert(0, src_path)
 import time
 import subprocess
 import numpy as np
@@ -136,10 +145,8 @@ def test_model_loading():
     logger.info("\nTEST 4: Testing model loading...")
     
     try:
-        from src.agents import ChampionAgent
         
         # Load the trained model
-        agent = ChampionAgent(name="LoadedAgent", use_pretrained=False)
         agent.load_strategy("models/versions/champion_current")
         
         # Verify loaded state
@@ -163,11 +170,9 @@ def test_agent_decision_making():
     logger.info("\nTEST 5: Testing agent decision making...")
     
     try:
-        from src.agents import ChampionAgent
         from src.deepstack.game import Card, Rank, Suit
         
         # Load trained agent
-        agent = ChampionAgent(name="TestAgent", use_pretrained=False)
         agent.load_strategy("models/versions/champion_current")
         
         # Test decision making
@@ -285,9 +290,7 @@ def test_agent_evaluation():
     logger = Logger(verbose=True)
     logger.info("\nTEST 8: Testing agent evaluation and benchmarking...")
     try:
-        from src.agents import ChampionAgent, RandomAgent
         from src.deepstack.evaluation import Evaluator
-        agent = ChampionAgent(name="EvalAgent", use_pretrained=False)
         opponent = RandomAgent()
         evaluator = Evaluator([agent, opponent])
         results = evaluator.evaluate_agents(num_hands=10, verbose=False)

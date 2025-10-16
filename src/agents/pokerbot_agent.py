@@ -1,10 +1,6 @@
 """
 PokerBot Agent - Unified world-class championship poker AI.
 
-This is the consolidated, modular agent combining the best features from:
-- ChampionAgent: CFR + DQN + DeepStack + Equity Tables
-- EliteUnifiedAgent: DeepStack continual re-solving + CFR+ + Opponent Modeling
-
 Architecture:
 - Modular component system with configurable features
 - Ensemble decision-making with weighted voting

@@ -6,10 +6,20 @@ Tests basic functionality without requiring full training.
 
 import sys
 import os
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
+from dotenv import load_dotenv
+load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), '..', '.env'))
+pythonpath = os.environ.get("PYTHONPATH")
+if pythonpath:
+    for p in pythonpath.split(os.pathsep):
+        if p and p not in sys.path:
+            sys.path.insert(0, p)
+# Fallback: always add src path directly
+src_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'src'))
+if src_path not in sys.path:
+    sys.path.insert(0, src_path)
 
-from agents import create_agent, get_available_agents
-from deepstack.game import Card, Action
+from src.agents import create_agent, get_available_agents
+from src.deepstack.game import Card, Action
 
 
 def test_agent_registry():

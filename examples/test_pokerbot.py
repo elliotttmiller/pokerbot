@@ -1,14 +1,24 @@
 #!/usr/bin/env python3
 """Test suite for unified PokerBot Agent."""
 
-import sys
+
 import os
+import sys
+import traceback
+from dotenv import load_dotenv
+load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), '..', '.env'))
+pythonpath = os.environ.get("PYTHONPATH")
+if pythonpath:
+    for p in pythonpath.split(os.pathsep):
+        if p and p not in sys.path:
+            sys.path.insert(0, p)
+# Fallback: always add src path directly
+src_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'src'))
+if src_path not in sys.path:
+    sys.path.insert(0, src_path)
 
-# Add src to path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
-
-from agents import create_agent
-from deepstack.game import Action, Card, Rank, Suit
+from src.agents import create_agent, get_available_agents
+from src.deepstack.game import Action, Card, Rank, Suit
 
 
 def test_pokerbot_creation():
@@ -176,19 +186,18 @@ def test_pokerbot_save_load():
 def test_pokerbot_registry():
     """Test that PokerBot is properly registered."""
     print("Testing PokerBot registry...")
-    
     try:
-        from agents import get_available_agents
-        
         agents = get_available_agents()
         assert 'pokerbot' in agents, f"pokerbot not in registry: {agents}"
         print(f"  ✓ Available agents: {agents}")
-        
         # Test that it can be created through registry
         agent = create_agent('pokerbot', name='RegistryTest', use_pretrained=False)
         assert agent.name == 'RegistryTest'
         print("  ✓ Agent created through registry")
-        
+    except Exception as e:
+        print(f"✗ PokerBot registry tests failed: {e}\n")
+        traceback.print_exc()
+        return False
         print("✓ PokerBot registry tests passed\n")
         return True
     except Exception as e:

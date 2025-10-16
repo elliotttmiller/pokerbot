@@ -4,7 +4,7 @@
 import argparse
 
 from src.agents import DQNAgent, FixedStrategyAgent, RandomAgent
-from src.evaluation import Evaluator
+from src.deepstack.game import Evaluator
 from src.utils import Config, Logger
 
 
