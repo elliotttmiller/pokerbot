@@ -1,5 +1,10 @@
 """Champion Agent - Unified CFR + DQN hybrid with pre-trained model integration.
 
+DEPRECATED: This agent has been superseded by PokerBotAgent (pokerbot_agent.py).
+Please use create_agent('pokerbot') instead for new projects.
+
+This file is maintained for backward compatibility only.
+
 This agent combines the best of multiple approaches:
 - CFR (Counterfactual Regret Minimization) for game-theoretic play
 - DQN (Deep Q-Network) for learned patterns and adaptability  
