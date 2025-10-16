@@ -1,9 +1,15 @@
 #!/usr/bin/env python3
-"""Test suite for Champion Agent."""
+"""Test suite for Champion Agent (Legacy - for backward compatibility testing).
+
+Note: ChampionAgent is deprecated. For new tests, use test_pokerbot.py.
+This file tests the legacy ChampionAgent for backward compatibility.
+"""
 
 import sys
 
-from src.agents import ChampionAgent, CFRAgent, DQNAgent
+from src.agents import create_agent
+from src.agents.champion_agent import ChampionAgent
+from src.agents.cfr_agent import CFRAgent
 from src.deepstack.game import Action, Card, Rank, Suit
 
 

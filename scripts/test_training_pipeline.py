@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """
-End-to-End Test for Champion Agent Training Pipeline
+End-to-End Test for PokerBot Agent Training Pipeline
 
 This script runs a complete test of the training pipeline to verify
-all components work correctly.
+all components work correctly with the unified PokerBotAgent.
 
 Usage:
     python scripts/test_training_pipeline.py
@@ -17,7 +17,10 @@ import time
 import subprocess
 import numpy as np
 from src.utils import Logger
-from src.agents import ChampionAgent, CFRAgent, DQNAgent, RandomAgent, FixedStrategyAgent
+from src.agents import create_agent
+from src.agents.cfr_agent import CFRAgent
+from src.agents.random_agent import RandomAgent
+from src.agents.fixed_strategy_agent import FixedStrategyAgent
 from src.deepstack.evaluation import Evaluator, Trainer
 from src.deepstack.game import GameState, Card, Rank, Suit
 from src.deepstack.utils.bucketer import Bucketer
@@ -31,7 +34,9 @@ def test_imports():
     logger.info("TEST 1: Testing imports...")
     
     try:
-        from src.agents import ChampionAgent, CFRAgent, DQNAgent, RandomAgent, FixedStrategyAgent
+        from src.agents import create_agent
+        from src.agents.cfr_agent import CFRAgent
+        from src.agents.random_agent import RandomAgent
         from src.deepstack.evaluation import Evaluator, Trainer
         from src.deepstack.game import GameState, Card, Rank, Suit
         logger.info("  [OK] All imports successful")
@@ -39,25 +44,20 @@ def test_imports():
     except Exception as e:
         logger.error(f"  [FAIL] Import failed: {e}")
         return False
-    except Exception as e:
-        logger.error(f"  [FAIL] Import failed: {e}")
-        return False
 
 
 def test_agent_creation():
-    """Test creating a Champion Agent."""
+    """Test creating a PokerBot Agent."""
     logger = Logger(verbose=True)
     logger.info("\nTEST 2: Testing agent creation...")
     
     try:
-        from src.agents import ChampionAgent
+        agent = create_agent('pokerbot', name="TestAgent", use_pretrained=False)
         
-        agent = ChampionAgent(name="TestAgent", use_pretrained=False)
-        
-        assert agent.state_size == 60
-        assert agent.action_size == 3
-        assert agent.cfr is not None
-        assert agent.model is not None
+        assert agent.state_size == 120
+        assert agent.action_size == 5
+        assert hasattr(agent, 'cfr_component')
+        assert hasattr(agent, 'dqn_model')
         
         logger.info("  [OK] Agent created successfully")
         logger.info(f"    State size: {agent.state_size}")
@@ -80,11 +80,12 @@ def test_training_pipeline():
     try:
         import subprocess
         
-        # Run training with very minimal settings
+        # Run training with very minimal settings using PokerBot
         result = subprocess.run(
             [
                 sys.executable,
-                "scripts/train_champion.py",
+                "scripts/train.py",
+                "--agent-type", "pokerbot",
                 "--mode", "smoketest",
                 "--episodes", "5",
                 "--cfr-iterations", "10"
