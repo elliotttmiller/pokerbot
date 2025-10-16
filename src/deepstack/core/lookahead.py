@@ -130,13 +130,13 @@ class Lookahead:
     value estimation at depth-limited leaves.
     """
     
-    def __init__(self, game_variant: str = 'leduc', num_hands: int = 6, value_network: Optional[ValueNN] = None):
+    def __init__(self, game_variant: str = 'holdem', num_hands: int = 169, value_network: Optional[ValueNN] = None):
         """
         Initialize lookahead solver.
         
         Args:
-            game_variant: 'leduc' or 'holdem'  
-            num_hands: Number of hand abstractions
+            game_variant: 'holdem' (default for Texas Hold'em) or 'leduc' (legacy)
+            num_hands: Number of hand abstractions (169 for Hold'em, 6 for Leduc)
             value_network: Pre-trained ValueNN for leaf node estimation (DeepStack paper key component)
         """
         self.game_variant = game_variant

@@ -5,7 +5,8 @@ from dataclasses import dataclass
 
 
 PLAYERS_COUNT = 2
-STREETS_COUNT = 2
+# Texas Hold'em has 4 betting streets: preflop, flop, turn, river
+STREETS_COUNT = 4
 
 
 @dataclass(frozen=True)

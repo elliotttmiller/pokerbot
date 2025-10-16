@@ -22,14 +22,14 @@ class ContinualResolving:
     maintaining consistency of player ranges and opponent counterfactual values.
     """
     
-    def __init__(self, game_variant: str = 'leduc', stack_size: int = 1200, ante: int = 100):
+    def __init__(self, game_variant: str = 'holdem', stack_size: int = 20000, ante: int = 100):
         """
         Initialize continual resolving.
         
         Args:
-            game_variant: 'leduc' or 'holdem'
-            stack_size: Starting stack size
-            ante: Ante amount
+            game_variant: 'holdem' (default for Texas Hold'em) or 'leduc' (legacy)
+            stack_size: Starting stack size (20000 for Hold'em, 1200 for Leduc)
+            ante: Ante amount (100 for Hold'em, 100 for Leduc)
         """
         self.game_variant = game_variant
         self.stack_size = stack_size

@@ -34,16 +34,16 @@ class ImprovedDataGenerator:
     """
     
     def __init__(self, 
-                 game_variant: str = 'leduc',
-                 num_hands: int = 6,
+                 game_variant: str = 'holdem',
+                 num_hands: int = 169,
                  cfr_iterations: int = 1000,
                  verbose: bool = True):
         """
         Initialize data generator.
         
         Args:
-            game_variant: 'leduc' or 'holdem'
-            num_hands: Number of hand buckets (6 for Leduc, 169 for Hold'em)
+            game_variant: 'holdem' (default for Texas Hold'em) or 'leduc' (legacy)
+            num_hands: Number of hand buckets (169 for Hold'em, 6 for Leduc)
             cfr_iterations: CFR iterations per situation (paper uses 1000+)
             verbose: Print progress
         """
@@ -73,8 +73,12 @@ class ImprovedDataGenerator:
         Returns:
             Dict with keys: board, pot_state, player_range, opponent_range
         """
-        # Sample random board (empty for preflop, random cards for later streets)
-        if self.game_variant == 'leduc':
+        # Sample random board for Texas Hold'em
+        if self.game_variant == 'holdem':
+            # Hold'em: sample 0, 3, 4, or 5 board cards (preflop, flop, turn, river)
+            num_board_cards = np.random.choice([0, 3, 4, 5], p=[0.3, 0.4, 0.2, 0.1])
+            board = list(np.random.choice(52, num_board_cards, replace=False))
+        elif self.game_variant == 'leduc':
             # Leduc: 6 cards total, sample 0-1 board cards
             num_board_cards = np.random.choice([0, 1])
             board = list(np.random.choice(6, num_board_cards, replace=False))
@@ -263,22 +267,22 @@ class ImprovedDataGenerator:
 def generate_training_data(train_count: int = 10000,
                           valid_count: int = 1000,
                           output_path: str = 'data/deepstacked_training/samples/train_samples_improved',
-                          game_variant: str = 'leduc',
+                          game_variant: str = 'holdem',
                           cfr_iterations: int = 1000) -> None:
     """
     Main function to generate improved training data.
     
     Per DeepStack paper: Generate 10M+ training examples for Hold'em,
-    100K+ for Leduc. Each solved with 1000+ CFR iterations.
+    100K+ for Leduc (legacy). Each solved with 1000+ CFR iterations.
     
     Args:
         train_count: Number of training examples
         valid_count: Number of validation examples  
         output_path: Path to save data
-        game_variant: 'leduc' or 'holdem'
+        game_variant: 'holdem' (default) or 'leduc' (legacy)
         cfr_iterations: CFR iterations per sample
     """
-    num_hands = 6 if game_variant == 'leduc' else 169
+    num_hands = 169 if game_variant == 'holdem' else 6
     
     generator = ImprovedDataGenerator(
         game_variant=game_variant,
@@ -312,16 +316,17 @@ def generate_training_data(train_count: int = 10000,
     print(f"Data saved to: {output_path}")
     print()
     print("IMPORTANT: This is an improved implementation following the paper.")
-    print("For championship-level performance, generate 100K+ samples (Leduc)")
-    print("or 10M+ samples (Hold'em) with this script.")
+    print("For championship-level performance:")
+    print("  - Generate 10M+ samples for Texas Hold'em (production)")
+    print("  - Generate 100K+ samples for Leduc Hold'em (testing/legacy)")
     print("="*70)
 
 
 if __name__ == '__main__':
-    # Example: Generate small dataset for testing
+    # Example: Generate dataset for Texas Hold'em
     generate_training_data(
         train_count=1000,
         valid_count=100,
-        game_variant='leduc',
+        game_variant='holdem',
         cfr_iterations=1000
     )

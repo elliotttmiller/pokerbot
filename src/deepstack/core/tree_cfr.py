@@ -62,8 +62,8 @@ class TreeCFR:
                 - 'regrets': Final regret values
         """
         if starting_ranges is None:
-            # Default to uniform ranges
-            num_hands = 6  # Leduc Hold'em default
+            # Default to uniform ranges for Texas Hold'em (169 hands)
+            num_hands = 169  # Hold'em default (169 hand combinations)
             starting_ranges = np.array([
                 np.ones(num_hands) / num_hands,
                 np.ones(num_hands) / num_hands

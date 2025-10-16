@@ -27,14 +27,14 @@ class Resolving:
     This class is used by the player during actual gameplay.
     """
     
-    def __init__(self, num_hands: int = 6, game_variant: str = 'leduc',
+    def __init__(self, num_hands: int = 169, game_variant: str = 'holdem',
                  value_nn: Optional[ValueNN] = None):
         """
         Initialize resolving module.
         
         Args:
-            num_hands: Number of possible hands
-            game_variant: 'leduc' or 'holdem'
+            num_hands: Number of possible hands (169 for Hold'em, 6 for Leduc)
+            game_variant: 'holdem' (default for Texas Hold'em) or 'leduc' (legacy)
             value_nn: Pre-trained value network for leaf estimation (DeepStack key component)
         """
         self.num_hands = num_hands

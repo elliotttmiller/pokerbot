@@ -36,8 +36,8 @@ def _encode_board(cards: Sequence[Any]) -> Sequence[Any]:
 class DeepStackLookahead:
     """Thin wrapper maintaining the historical agent interface."""
 
-    game_variant: str = "leduc"
-    stack_size: int = 1200
+    game_variant: str = "holdem"  # Default to Texas Hold'em
+    stack_size: int = 20000  # Standard Hold'em stack
     ante: int = 100
     bet_sizing: Optional[Sequence[float]] = None
     _core: Lookahead = field(init=False, repr=False)

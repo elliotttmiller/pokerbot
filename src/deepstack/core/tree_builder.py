@@ -95,7 +95,7 @@ class PokerTreeBuilder:
     - Chance nodes for card dealing
     """
     
-    def __init__(self, game_variant: str = 'leduc', 
+    def __init__(self, game_variant: str = 'holdem', 
                  stack_size: int = 1000,
                  small_blind: int = 10,
                  big_blind: int = 20):
@@ -103,7 +103,7 @@ class PokerTreeBuilder:
         Initialize tree builder.
         
         Args:
-            game_variant: 'leduc' or 'holdem'
+            game_variant: 'holdem' (default for Texas Hold'em) or 'leduc' (legacy)
             stack_size: Starting stack size
             small_blind: Small blind amount
             big_blind: Big blind amount
