@@ -2,6 +2,11 @@
 Elite Unified Agent: World-class championship poker AI combining DeepStack, CFR+, DQN, 
 and advanced techniques.
 
+DEPRECATED: This agent has been superseded by PokerBotAgent (pokerbot_agent.py).
+Please use create_agent('pokerbot') instead for new projects.
+
+This file is maintained for backward compatibility only.
+
 This agent unifies:
 - DeepStack continual re-solving with lookahead
 - CFR+ with regret matching+ and action pruning  

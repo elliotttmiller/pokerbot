@@ -2,7 +2,71 @@
 
 A comprehensive poker bot system with multiple AI agents, including advanced CFR with pruning, DQN, and unified champion agents. The system features **a fully optimized DeepStack training pipeline**, vision-based game state detection, distributed training, and real-time search capabilities.
 
+## 📚 Documentation
+
+**NEW: Complete Training System** 
+- 🎯 **[TRAINING_GUIDE.md](TRAINING_GUIDE.md)** - Complete step-by-step training manual
+- 📊 **[SYSTEM_AUDIT.md](SYSTEM_AUDIT.md)** - Comprehensive system audit and optimization report
+- ⚡ **[QUICK_REFERENCE.md](QUICK_REFERENCE.md)** - Quick reference card for common commands
+
+**Agent System:**
+- 📖 **[MIGRATION_GUIDE.md](docs/MIGRATION_GUIDE.md)** - Agent migration and usage guide
+- 🔧 **[IMPLEMENTATION_SUMMARY.md](docs/IMPLEMENTATION_SUMMARY.md)** - Technical implementation details
+- 🔄 **[IMPORT_UPDATE_SUMMARY.md](docs/IMPORT_UPDATE_SUMMARY.md)** - System-wide import changes
+
+**Quick Start Training:**
+```bash
+# Quick test (1-2 minutes)
+python scripts/train.py --agent-type pokerbot --mode smoketest --verbose
+
+# Development (20-30 minutes)
+python scripts/train.py --agent-type pokerbot --mode standard --verbose
+
+# Championship (4-8 hours)
+python scripts/train.py --agent-type pokerbot --mode production --verbose --report
+```
+
+See **[TRAINING_GUIDE.md](TRAINING_GUIDE.md)** for complete instructions.
+
 ## 🚀 What's New
+
+### Unified PokerBot Agent 🎯 (Latest)
+
+The pokerbot now features a single, unified world-class agent combining all best features:
+
+- **✅ Modular Architecture** - Configure exactly what you need
+- **✅ All Features Included** - CFR/CFR+, DQN, DeepStack, Opponent Modeling
+- **✅ Ensemble Decision Making** - Best-of-breed from multiple AI techniques
+- **✅ Comprehensive Tests** - Full test coverage and validation
+- **✅ Easy to Use** - Simple API with sensible defaults
+
+**Quick Start:**
+```bash
+# Create and test the unified agent
+python examples/test_pokerbot.py
+
+# Train with the new agent
+python scripts/train.py --agent-type pokerbot --mode smoketest
+```
+
+**Code Example:**
+```python
+from agents import create_agent
+
+# Create agent with all features
+agent = create_agent('pokerbot', name='MyBot')
+
+# Or customize components
+agent = create_agent('pokerbot', 
+                    use_cfr=True, 
+                    use_dqn=True,
+                    use_deepstack=True,
+                    cfr_weight=0.4,
+                    dqn_weight=0.3,
+                    deepstack_weight=0.3)
+```
+
+See [Migration Guide](docs/MIGRATION_GUIDE.md) for detailed documentation.
 
 ### Optimized DeepStack Training System ✨
 
@@ -29,7 +93,15 @@ See [DeepStack Training Guide](docs/DEEPSTACK_TRAINING.md) for complete document
 
 ### 🏆 Advanced AI Agents
 
-- **Champion Agent**: Unified CFR + DQN hybrid with pre-trained models and **DeepStack continual re-solving**
+- **PokerBot Agent (NEW!)**: Unified world-class agent combining all features ✨
+  - Modular architecture with configurable components
+  - CFR/CFR+ for game-theoretic optimal play
+  - DQN for pattern recognition and learning
+  - DeepStack continual re-solving
+  - Opponent modeling and pre-trained models
+  - **Recommended for all new development**
+- **Champion Agent**: Unified CFR + DQN hybrid with pre-trained models (deprecated, use PokerBot)
+- **Elite Unified Agent**: Advanced multi-component agent (deprecated, use PokerBot)
 - **DeepStack Engine**: Complete Python/PyTorch port of the championship DeepStack AI
   - Continual re-solving for dynamic game tree solving
   - Neural network value estimation for depth-limited search
@@ -40,6 +112,8 @@ See [DeepStack Training Guide](docs/DEEPSTACK_TRAINING.md) for complete document
 - **CFR Agent**: Counterfactual Regret Minimization for game-theoretic optimal play
 - **Fixed Strategy Agent**: GTO-inspired fixed strategy with pot odds calculations
 - **Random Agent**: Baseline random decision-making agent
+
+> 📖 **Migration Guide**: See [docs/MIGRATION_GUIDE.md](docs/MIGRATION_GUIDE.md) for details on using the new PokerBot agent.
 
 ### 🚀 Progressive Training Pipeline
 
