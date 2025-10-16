@@ -2,6 +2,32 @@
 
 A comprehensive poker bot system with multiple AI agents, including advanced CFR with pruning, DQN, and unified champion agents. The system features **a fully optimized DeepStack training pipeline**, vision-based game state detection, distributed training, and real-time search capabilities.
 
+## 📚 Documentation
+
+**NEW: Complete Training System** 
+- 🎯 **[TRAINING_GUIDE.md](TRAINING_GUIDE.md)** - Complete step-by-step training manual
+- 📊 **[SYSTEM_AUDIT.md](SYSTEM_AUDIT.md)** - Comprehensive system audit and optimization report
+- ⚡ **[QUICK_REFERENCE.md](QUICK_REFERENCE.md)** - Quick reference card for common commands
+
+**Agent System:**
+- 📖 **[MIGRATION_GUIDE.md](docs/MIGRATION_GUIDE.md)** - Agent migration and usage guide
+- 🔧 **[IMPLEMENTATION_SUMMARY.md](docs/IMPLEMENTATION_SUMMARY.md)** - Technical implementation details
+- 🔄 **[IMPORT_UPDATE_SUMMARY.md](docs/IMPORT_UPDATE_SUMMARY.md)** - System-wide import changes
+
+**Quick Start Training:**
+```bash
+# Quick test (1-2 minutes)
+python scripts/train.py --agent-type pokerbot --mode smoketest --verbose
+
+# Development (20-30 minutes)
+python scripts/train.py --agent-type pokerbot --mode standard --verbose
+
+# Championship (4-8 hours)
+python scripts/train.py --agent-type pokerbot --mode production --verbose --report
+```
+
+See **[TRAINING_GUIDE.md](TRAINING_GUIDE.md)** for complete instructions.
+
 ## 🚀 What's New
 
 ### Unified PokerBot Agent 🎯 (Latest)
