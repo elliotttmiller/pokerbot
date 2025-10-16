@@ -36,10 +36,10 @@ from src.utils.data_validation import validate_deepstacked_samples, validate_equ
 def main():
     """Main training function."""
     parser = argparse.ArgumentParser(description='Train the championship-level agent (progressive pipeline)')
-    parser.add_argument('--mode', type=str, choices=['smoketest', 'standard', 'production', 'full'], default='smoketest',
+    parser.add_argument('--mode', type=str, choices=['smoketest', 'standard', 'intermediate', 'production', 'full'], default='smoketest',
                        help='Training mode selects configuration profile from scripts/config')
-    parser.add_argument('--agent-type', type=str, choices=['champion', 'pokerbot'], default='champion',
-                       help='Agent type to train (champion or pokerbot)')
+    parser.add_argument('--agent-type', type=str, choices=['champion', 'pokerbot'], default='pokerbot',
+                       help='Agent type to train (champion or pokerbot - default: pokerbot)')
     parser.add_argument('--episodes', type=int, default=None,
                        help='Override number of episodes for stage 2 and 3')
     parser.add_argument('--cfr-iterations', type=int, default=None,

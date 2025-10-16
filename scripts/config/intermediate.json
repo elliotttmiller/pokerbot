@@ -1,0 +1,14 @@
+{
+  "stage1_cfr_iterations": 1000,
+  "stage2_selfplay_episodes": 500,
+  "stage3_vicarious_episodes": 500,
+  "evaluation_interval": 50,
+  "save_interval": 100,
+  "batch_size": 16,
+  "validation_hands": 200,
+  "log_dir": "logs",
+  "report_dir": "models/reports",
+  "samples_path": "data/deepstacked_training/samples/train_samples",
+  "test_samples_path": "data/deepstacked_training/samples/test_samples",
+  "equity_path": "data/equity_tables/preflop_equity.json"
+}
