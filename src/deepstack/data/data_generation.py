@@ -21,7 +21,7 @@ import numpy as np
 import torch
 import os
 import sys
-from typing import Tuple, Optional
+from typing import Tuple, Optional, List
 from pathlib import Path
 
 # Ensure project root and src/ are on sys.path and load .env PYTHONPATH
@@ -65,7 +65,8 @@ class ImprovedDataGenerator:
     def __init__(self,
                  num_hands: int = 169,
                  cfr_iterations: int = 1000,
-                 verbose: bool = True):
+                 verbose: bool = True,
+                 bucket_sampling_weights: Optional[np.ndarray] = None):
         """
         Initialize data generator.
         
@@ -77,6 +78,17 @@ class ImprovedDataGenerator:
         self.num_hands = num_hands
         self.cfr_iterations = cfr_iterations
         self.verbose = verbose
+        # Optional per-bucket sampling weights (length num_hands), non-negative. Used to bias range sampling.
+        if bucket_sampling_weights is not None:
+            w = np.asarray(bucket_sampling_weights, dtype=np.float64)
+            if w.shape[0] != num_hands:
+                raise ValueError(f"bucket_sampling_weights must have length {num_hands}, got {w.shape}")
+            w = np.clip(w, 0.0, None)
+            if w.sum() <= 0:
+                w = np.ones_like(w)
+            self.bucket_weights = (w / w.sum()).astype(np.float64)
+        else:
+            self.bucket_weights = None
         
         # Import here to avoid circular dependencies
         try:
@@ -133,15 +145,26 @@ class ImprovedDataGenerator:
         }
     
     def _sample_range(self) -> np.ndarray:
-        """Sample a range (could be uniform or with variation)."""
-        # For training diversity, sometimes use uniform, sometimes biased
+        """Sample a range with optional bucket-weight bias.
+
+        Strategy:
+          - If bucket weights provided, draw a Dirichlet with alpha = base + scale * weights
+            to bias probability mass towards targeted buckets, else fall back to uniform/dirichlet mix.
+        """
+        if self.bucket_weights is not None:
+            base = 1.0  # base concentration
+            scale = 8.0  # strength of bias
+            alpha = base + scale * (self.bucket_weights * self.num_hands)
+            # Numerical guard
+            alpha = np.maximum(alpha, 1e-3)
+            r = np.random.dirichlet(alpha)
+            return r.astype(np.float32)
+        # No weights: original behavior
         if np.random.random() < 0.7:
-            # Uniform range
-            return np.ones(self.num_hands) / self.num_hands
+            return (np.ones(self.num_hands, dtype=np.float32) / self.num_hands)
         else:
-            # Slightly biased range (stronger hands more likely)
-            range_weights = np.random.dirichlet(np.ones(self.num_hands) * 2)
-            return range_weights
+            r = np.random.dirichlet(np.ones(self.num_hands, dtype=np.float64) * 2.0)
+            return r.astype(np.float32)
     
     def solve_situation(self, situation: dict) -> Tuple[np.ndarray, np.ndarray]:
         """
@@ -314,7 +337,8 @@ class ImprovedDataGenerator:
 def generate_training_data(train_count: int = 10000,
                           valid_count: int = 1000,
                           output_path: str = r'C:/Users/AMD/pokerbot/src/train_samples',
-                          cfr_iterations: int = 1000) -> None:
+                          cfr_iterations: int = 1000,
+                          bucket_sampling_weights: Optional[np.ndarray] = None) -> None:
     """
     Main function to generate improved training data (Texas Hold'em only).
     
@@ -331,7 +355,8 @@ def generate_training_data(train_count: int = 10000,
     generator = ImprovedDataGenerator(
         num_hands=num_hands,
         cfr_iterations=cfr_iterations,
-        verbose=True
+        verbose=True,
+        bucket_sampling_weights=bucket_sampling_weights
     )
     
     print("="*70)
@@ -384,6 +409,15 @@ def generate_training_data(train_count: int = 10000,
         'std': torch.from_numpy(target_std.astype(np.float32))
     }
     torch.save(scaling, os.path.join(output_path, 'targets_scaling.pt'))
+    # If sampling weights were used, save for provenance
+    if bucket_sampling_weights is not None:
+        try:
+            import json as _json
+            weights_path = os.path.join(output_path, 'bucket_sampling_weights.json')
+            with open(weights_path, 'w') as f:
+                _json.dump(list(map(float, bucket_sampling_weights)), f)
+        except Exception:
+            pass
     
     print("="*70)
     print("DATA GENERATION COMPLETE")
@@ -401,10 +435,29 @@ def generate_training_data(train_count: int = 10000,
 
 
 if __name__ == '__main__':
-    # Example: Generate dataset for Texas Hold'em
+    import argparse as _argparse
+    import json as _json
+    parser = _argparse.ArgumentParser(description='Generate DeepStack training data')
+    parser.add_argument('--train-count', type=int, default=1000)
+    parser.add_argument('--valid-count', type=int, default=512)
+    parser.add_argument('--cfr-iterations', type=int, default=1000)
+    parser.add_argument('--output-path', type=str, default=r'C:/Users/AMD/pokerbot/src/train_samples')
+    parser.add_argument('--bucket-weights-path', type=str, default='', help='Path to JSON file with 169 floats for bucket sampling weights')
+    args = parser.parse_args()
+
+    weights = None
+    if args.bucket_weights_path:
+        try:
+            with open(args.bucket_weights_path, 'r') as f:
+                arr = _json.load(f)
+            weights = np.asarray(arr, dtype=np.float64)
+        except Exception as _e:
+            print(f"[WARN] Failed to read bucket weights: {args.bucket_weights_path} ({_e})")
+
     generate_training_data(
-        train_count=1000,
-        valid_count=512,  # Increased for robust validation and early stopping
-        output_path=r'C:/Users/AMD/pokerbot/src/train_samples',
-        cfr_iterations=1000
+        train_count=args.train_count,
+        valid_count=args.valid_count,
+        output_path=args.output_path,
+        cfr_iterations=args.cfr_iterations,
+        bucket_sampling_weights=weights
     )

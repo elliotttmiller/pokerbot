@@ -284,6 +284,33 @@ def validate_model(model_path, data_path, num_buckets: int | None = None, batch_
         best_idx = np.argsort(-corrs)[:5]
         print(f"    Worst 5 dims: {[(int(i), float(corrs[i])) for i in worst_idx]}")
         print(f"    Best  5 dims: {[(int(i), float(corrs[i])) for i in best_idx]}")
+
+        # Export per-bucket correlations (averaged across players) for downstream weighting
+        try:
+            bucket_corrs = []
+            nb = num_outputs // 2
+            for b in range(nb):
+                # average both players' dims for this bucket
+                vals = []
+                if not np.isnan(corrs[b]):
+                    vals.append(float(corrs[b]))
+                if not np.isnan(corrs[nb + b]):
+                    vals.append(float(corrs[nb + b]))
+                bucket_corrs.append(float(np.mean(vals)) if vals else 0.0)
+            # Write reports next to the model directory (e.g., models/versions/reports)
+            # This avoids duplicating 'models' in the path when a relative model_path is provided.
+            reports_dir = os.path.join(os.path.dirname(model_path), 'reports')
+            os.makedirs(reports_dir, exist_ok=True)
+            out_json = os.path.join(reports_dir, 'per_bucket_corrs.json')
+            with open(out_json, 'w') as f:
+                import json as _json
+                _json.dump({
+                    'num_buckets': int(nb),
+                    'bucket_corrs': bucket_corrs
+                }, f, indent=2)
+            print(f"  ✓ Exported per-bucket correlations to {out_json}")
+        except Exception as _e:
+            print(f"  [WARN] Failed to export per-bucket correlations: {_e}")
     
     print()
     print("="*70)
@@ -319,13 +346,20 @@ def validate_model(model_path, data_path, num_buckets: int | None = None, batch_
     print("Model ready for deployment!" if avg_loss < 0.25 else "Consider training for more epochs.")
     print("="*70)
     
-    return {
+    result = {
         'loss': avg_loss,
         'mae': avg_mae,
         'rmse': rmse,
         'correlation': correlation if len(pred_nonzero) > 0 else 0.0,
         'quality': quality
     }
+    # Attach per-bucket correlations if computed
+    try:
+        result['per_bucket_corrs'] = bucket_corrs  # type: ignore[name-defined]
+        result['num_buckets'] = int(num_outputs // 2)
+    except Exception:
+        pass
+    return result
 
 
 def main():

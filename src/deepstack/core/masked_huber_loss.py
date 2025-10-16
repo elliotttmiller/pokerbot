@@ -36,7 +36,7 @@ class MaskedHuberLoss(nn.Module):
         self.delta = delta
         self.normalize_by_valid_fraction = normalize_by_valid_fraction
     
-    def forward(self, y_pred, y_true, mask):
+    def forward(self, y_pred, y_true, mask, sample_weights: torch.Tensor | None = None):
         """
         Compute masked Huber loss.
         
@@ -67,7 +67,14 @@ class MaskedHuberLoss(nn.Module):
             # Weight each sample loss by 1/frac to maintain consistent scale
             sample_loss = torch.sum(masked_loss, dim=1) / valid_per_sample
             scaled = sample_loss / (frac + 1e-8)
+            if sample_weights is not None:
+                # Broadcast-safe multiply
+                scaled = scaled * sample_weights.view(-1)
             return torch.mean(scaled)
         else:
-            return torch.sum(masked_loss) / denom
+            # Mean over batch optionally weighted
+            sample_loss = torch.sum(masked_loss, dim=1) / (torch.sum(mask, dim=1) + 1e-8)
+            if sample_weights is not None:
+                sample_loss = sample_loss * sample_weights.view(-1)
+            return torch.mean(sample_loss)
 

@@ -74,3 +74,17 @@ class DataStream:
         batch_targets = targets[start:end]
         batch_mask = mask[start:end]
         return batch_inputs, batch_targets, batch_mask
+
+    def get_batch_with_street(self, split, batch_index):
+        """Get a batch including street tensor if available.
+        Returns (inputs, targets, mask, street_or_none)
+        """
+        batch_inputs, batch_targets, batch_mask = self.get_batch(split, batch_index)
+        street_key = f'{split}_street'
+        street = None
+        if street_key in self.data:
+            street_full = self.data[street_key]
+            start = batch_index * self.train_batch_size
+            end = start + self.train_batch_size
+            street = street_full[start:end]
+        return batch_inputs, batch_targets, batch_mask, street

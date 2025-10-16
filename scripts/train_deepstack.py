@@ -40,6 +40,17 @@ import torch.nn as nn
 from deepstack.core.net_builder import NetBuilder
 from deepstack.core.data_stream import DataStream
 from deepstack.core.masked_huber_loss import MaskedHuberLoss
+# Robust import for analyzer whether run as module or script
+try:
+    from train_analyzer import TrainAnalyzer  # same folder
+except Exception:
+    try:
+        from scripts.train_analyzer import TrainAnalyzer
+    except Exception:
+        scripts_dir = os.path.dirname(__file__)
+        if scripts_dir not in sys.path:
+            sys.path.insert(0, scripts_dir)
+        from train_analyzer import TrainAnalyzer
 
 
 class DeepStackTrainer:
@@ -56,6 +67,8 @@ class DeepStackTrainer:
         self.use_gpu = config.get('use_gpu', False) and torch.cuda.is_available()
         self.device = 'cuda' if self.use_gpu else 'cpu'
         self.fresh = config.get('fresh', False)
+        self.use_street_weighting = bool(config.get('use_street_weighting', True))
+        self.street_weights = config.get('street_weights', [0.8, 1.0, 1.2, 1.4])
 
         # Reproducibility
         seed = int(config.get('seed', 42))
@@ -64,6 +77,18 @@ class DeepStackTrainer:
         torch.manual_seed(seed)
         if self.use_gpu:
             torch.cuda.manual_seed_all(seed)
+            # Performance-focused cuDNN settings
+            deterministic = bool(config.get('deterministic', False))
+            try:
+                import torch.backends.cudnn as cudnn
+                if deterministic:
+                    torch.use_deterministic_algorithms(True)
+                    cudnn.deterministic = True
+                    cudnn.benchmark = False
+                else:
+                    cudnn.benchmark = True
+            except Exception:
+                pass
         
         # Initialize data stream first (to infer bucket count from data)
         data_path = config['data_path']
@@ -104,6 +129,14 @@ class DeepStackTrainer:
             use_gpu=self.use_gpu,
             input_size=input_dim
         )
+        # Optional compile for speed (PyTorch 2.x). Enable only on GPU to avoid CPU compiler requirements.
+        self.use_torch_compile = bool(config.get('use_torch_compile', True)) and self.use_gpu
+        if self.use_torch_compile:
+            try:
+                self.net = torch.compile(self.net)  # type: ignore[attr-defined]
+                print("  torch.compile: enabled")
+            except Exception:
+                print("  torch.compile: unavailable; skipping")
         
         # Initialize training components
         # Slightly smaller delta in standardized units and normalize by valid fraction for stability
@@ -161,6 +194,16 @@ class DeepStackTrainer:
         print(f"  Early stop: patience={self.patience}, min_delta={self.min_delta}")
         print(f"  Optimizer: AdamW (weight_decay={weight_decay})")
         print(f"  AMP: {'enabled' if self.use_amp else 'disabled'} | EMA: {'enabled' if self.ema_decay > 0 else 'disabled'} | Warmup epochs: {self.warmup_epochs} | min_lr: {self.min_lr}")
+        print(f"  Street weighting: {'enabled' if self.use_street_weighting else 'disabled'} weights={self.street_weights}")
+        # Analyzer for per-epoch diagnostics
+        scaling_path = os.path.join(self.config['data_path'], 'targets_scaling.pt')
+        scaling = None
+        if os.path.exists(scaling_path):
+            try:
+                scaling = torch.load(scaling_path, map_location='cpu')
+            except Exception:
+                scaling = None
+        self.analyzer = TrainAnalyzer(report_dir=os.path.join(self.versions_dir, 'reports'), scaling=scaling)
 
     def _init_ema(self):
         """Initialize EMA state from current model parameters."""
@@ -203,7 +246,7 @@ class DeepStackTrainer:
         self.optimizer.zero_grad(set_to_none=True)
         for batch_idx in range(num_batches):
             # Get batch
-            inputs, targets, mask = self.data_stream.get_batch('train', batch_idx)
+            inputs, targets, mask, streets = self.data_stream.get_batch_with_street('train', batch_idx)
             
             # Already tensors from DataStream, just move to device if needed
             if self.use_gpu and not inputs.is_cuda:
@@ -212,13 +255,28 @@ class DeepStackTrainer:
                 mask = mask.cuda()
             
             # Forward pass with AMP
+            # Optional street-balanced sample weights
+            sample_weights = None
+            if streets is not None and self.use_street_weighting:
+                # Heavier weight on later streets where signal is harder
+                # Mapping via config street_weights: [pre, flop, turn, river]
+                sw = torch.ones((inputs.shape[0],), device=inputs.device)
+                st = streets if streets.device == inputs.device else streets.to(inputs.device)
+                w = self.street_weights
+                pre_w, flop_w, turn_w, river_w = float(w[0]), float(w[1]), float(w[2]), float(w[3])
+                sw = sw * pre_w
+                sw = torch.where(st == 1, torch.ones_like(sw) * flop_w, sw)
+                sw = torch.where(st == 2, torch.ones_like(sw) * turn_w, sw)
+                sw = torch.where(st == 3, torch.ones_like(sw) * river_w, sw)
+                sample_weights = sw
+
             if self.use_amp:
                 with torch.cuda.amp.autocast():
                     outputs = self.net(inputs)
-                    batch_loss = self.criterion(outputs, targets, mask)
+                    batch_loss = self.criterion(outputs, targets, mask, sample_weights=sample_weights)
             else:
                 outputs = self.net(inputs)
-                batch_loss = self.criterion(outputs, targets, mask)
+                batch_loss = self.criterion(outputs, targets, mask, sample_weights=sample_weights)
             # Accumulate gradients
             loss = batch_loss / self.accumulation_steps
             
@@ -245,19 +303,29 @@ class DeepStackTrainer:
             total_loss += batch_loss.item()
         
         avg_loss = total_loss / num_batches
+        # Log one mini-batch snapshot to analyzer for train phase (last batch)
+        try:
+            self.analyzer.log_epoch(epoch, 'train', outputs.detach().cpu(), targets.detach().cpu(), mask.detach().cpu(), streets.detach().cpu() if streets is not None else None, loss_value=avg_loss)
+        except Exception:
+            pass
         return avg_loss
     
-    def validate(self):
+    def validate(self, epoch: int | None = None):
         """Validate on validation set."""
         self.net.eval()
         
         total_loss = 0.0
         num_batches = self.data_stream.get_valid_batch_count()
         
+        # Accumulate for full-epoch analyzer logging
+        outs_all = []
+        tgs_all = []
+        msk_all = []
+        str_all = []
         with torch.no_grad():
             for batch_idx in range(num_batches):
                 # Get batch
-                inputs, targets, mask = self.data_stream.get_batch('valid', batch_idx)
+                inputs, targets, mask, streets = self.data_stream.get_batch_with_street('valid', batch_idx)
                 
                 # Move to device if needed
                 if self.use_gpu and not inputs.is_cuda:
@@ -274,8 +342,23 @@ class DeepStackTrainer:
                 loss = self.criterion(outputs, targets, mask)
                 
                 total_loss += loss.item()
+                outs_all.append(outputs.detach().cpu())
+                tgs_all.append(targets.detach().cpu())
+                msk_all.append(mask.detach().cpu())
+                if streets is not None:
+                    str_all.append(streets.detach().cpu())
         
         avg_loss = total_loss / num_batches
+        # Log full validation epoch snapshot
+        try:
+            if outs_all:
+                outputs_cat = torch.cat(outs_all, dim=0)
+                targets_cat = torch.cat(tgs_all, dim=0)
+                mask_cat = torch.cat(msk_all, dim=0)
+                streets_cat = torch.cat(str_all, dim=0) if str_all else None
+                self.analyzer.log_epoch(epoch if epoch is not None else 0, 'valid', outputs_cat, targets_cat, mask_cat, streets_cat, loss_value=avg_loss)
+        except Exception:
+            pass
         return avg_loss
 
     def _is_state_dict_compatible(self, state: dict) -> bool:
@@ -311,8 +394,9 @@ class DeepStackTrainer:
         
         # Save best model to standardized versions directory
         if is_best:
+            state_to_save = self._get_ema_state() if self.ema_state is not None else self.net.state_dict()
             best_versions_path = os.path.join(self.versions_dir, 'best_model.pt')
-            torch.save(self.net.state_dict(), best_versions_path)
+            torch.save(state_to_save, best_versions_path)
             print(f"  ✓ Saved best model to {best_versions_path}")
     
     def train(self):
@@ -351,7 +435,7 @@ class DeepStackTrainer:
             if self.ema_state is not None:
                 current_state = self._get_current_state()
                 self._apply_state_dict(self._get_ema_state())
-            val_loss = self.validate()
+            val_loss = self.validate(epoch)
             if current_state is not None:
                 self._apply_state_dict(current_state)
             
