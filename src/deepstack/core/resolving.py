@@ -35,11 +35,11 @@ class Resolving:
         Args:
             num_hands: Number of possible hands
             game_variant: 'leduc' or 'holdem'
-            value_nn: Pre-trained value network (optional)
+            value_nn: Pre-trained value network for leaf estimation (DeepStack key component)
         """
         self.num_hands = num_hands
         self.game_variant = game_variant
-        self.value_nn = value_nn
+        self.value_nn = value_nn  # Store for passing to lookahead
         
         # Storage for last solve results
         self.current_node = None

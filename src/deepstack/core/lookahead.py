@@ -130,13 +130,14 @@ class Lookahead:
     value estimation at depth-limited leaves.
     """
     
-    def __init__(self, game_variant: str = 'leduc', num_hands: int = 6):
+    def __init__(self, game_variant: str = 'leduc', num_hands: int = 6, value_network: Optional[ValueNN] = None):
         """
         Initialize lookahead solver.
         
         Args:
             game_variant: 'leduc' or 'holdem'  
             num_hands: Number of hand abstractions
+            value_network: Pre-trained ValueNN for leaf node estimation (DeepStack paper key component)
         """
         self.game_variant = game_variant
         self.num_hands = num_hands
@@ -145,7 +146,7 @@ class Lookahead:
         self.builder = LookaheadBuilder(self)
         self.terminal_equity = None
         self.reconstruction_gadget = None
-        self.value_network = None
+        self.value_network = value_network  # Neural network for leaf values (Paper Section 2.1)
         
         # Data structures (allocated by builder)
         self.tree = None
@@ -325,7 +326,12 @@ class Lookahead:
                 self.average_strategies_data[d] += self.current_strategy_data[d]
     
     def _compute_terminal_equities(self):
-        """Compute terminal node values (folds and showdowns)."""
+        """
+        Compute terminal node values (folds, showdowns, and depth-limited leaves).
+        
+        DeepStack paper Section 2.1: At depth-limited leaves, use neural network
+        to estimate counterfactual values instead of solving full subtree.
+        """
         if not self.terminal_equity:
             return
             
@@ -336,6 +342,9 @@ class Lookahead:
             ranges = self.ranges_data[d]
             cfvs = self.cfvs_data[d]
             
+            # Check if this is a leaf node (at depth limit)
+            is_leaf_node = (d == self.depth)
+            
             # Compute fold values
             for action in range(min(ranges.shape[0], cfvs.shape[0])):
                 for bet in range(min(ranges.shape[1], cfvs.shape[1])):
@@ -345,28 +354,89 @@ class Lookahead:
                     # Player 0 folds
                     cfvs[action, bet, 0, 0, :] = -pot_size
                     cfvs[action, bet, 0, 1, :] = pot_size
-                    
-            # Compute call/showdown values using terminal equity
-            for d_level in range(1, min(len(self.ranges_data), len(self.cfvs_data))):
-                level_ranges = self.ranges_data[d_level]
-                level_cfvs = self.cfvs_data[d_level]
+            
+            # Compute values at leaf nodes
+            if is_leaf_node and self.value_network is not None:
+                # Use neural network for leaf value estimation (DeepStack key innovation)
+                self._estimate_leaf_values_with_nn(d)
+            else:
+                # Use terminal equity for showdowns
+                self._compute_showdown_values(d)
+    
+    def _estimate_leaf_values_with_nn(self, depth_level: int):
+        """
+        Estimate leaf node values using neural network.
+        
+        DeepStack paper Section 2.1: "At depth-limited leaves, the neural network
+        provides estimates of counterfactual values, avoiding expensive subtree solving."
+        
+        Args:
+            depth_level: Current depth level (should be at leaf)
+        """
+        if depth_level >= len(self.ranges_data) or depth_level >= len(self.cfvs_data):
+            return
+        
+        level_ranges = self.ranges_data[depth_level]
+        level_cfvs = self.cfvs_data[depth_level]
+        
+        try:
+            import torch
+            
+            # Extract player ranges at leaf
+            p1_range = level_ranges[0, 0, 0, 0, :]
+            p2_range = level_ranges[0, 0, 0, 1, :]
+            
+            if np.sum(p1_range) > 0 and np.sum(p2_range) > 0:
+                # Prepare input for neural network
+                # Input format: [player_range, opponent_range, pot_size]
+                pot_size = 100.0  # Would be actual pot size in production
                 
-                # Call terminal equity for showdowns
-                if level_ranges.size > 0 and level_cfvs.size > 0:
-                    # Extract ranges for terminal equity calculation
-                    p1_range = level_ranges[0, 0, 0, 0, :]
-                    p2_range = level_ranges[0, 0, 0, 1, :]
-                    
-                    if np.sum(p1_range) > 0 and np.sum(p2_range) > 0:
-                        # Compute showdown values
-                        p1_values, p2_values = self.terminal_equity.call_value(
-                            p1_range.reshape(1, -1), 
-                            p2_range.reshape(1, -1)
-                        )
-                        
-                        if p1_values is not None and p2_values is not None:
-                            level_cfvs[0, 0, 0, 0, :] = p1_values.flatten()
-                            level_cfvs[0, 0, 0, 1, :] = p2_values.flatten()
+                nn_input = torch.FloatTensor(np.concatenate([
+                    p1_range, p2_range, [pot_size / 1000.0]
+                ])).unsqueeze(0)
+                
+                # Forward pass through network
+                with torch.no_grad():
+                    nn_output = self.value_network(nn_input)
+                
+                # Extract values for each player
+                output_np = nn_output.squeeze(0).cpu().numpy()
+                p1_values = output_np[:self.num_hands]
+                p2_values = output_np[self.num_hands:]
+                
+                # Store NN-estimated values at leaf
+                level_cfvs[0, 0, 0, 0, :] = p1_values
+                level_cfvs[0, 0, 0, 1, :] = p2_values
+                
+        except Exception as e:
+            # Fallback to showdown values if NN fails
+            print(f"[WARNING] NN leaf estimation failed: {e}, using showdown values")
+            self._compute_showdown_values(depth_level)
+    
+    def _compute_showdown_values(self, depth_level: int):
+        """Compute showdown values using terminal equity (traditional method)."""
+        if depth_level >= len(self.ranges_data) or depth_level >= len(self.cfvs_data):
+            return
+        
+        level_ranges = self.ranges_data[depth_level]
+        level_cfvs = self.cfvs_data[depth_level]
+        
+        # Call terminal equity for showdowns
+        if level_ranges.size > 0 and level_cfvs.size > 0:
+            # Extract ranges for terminal equity calculation
+            p1_range = level_ranges[0, 0, 0, 0, :]
+            p2_range = level_ranges[0, 0, 0, 1, :]
+            
+            if np.sum(p1_range) > 0 and np.sum(p2_range) > 0:
+                # Compute showdown values
+                p1_values, p2_values = self.terminal_equity.call_value(
+                    p1_range.reshape(1, -1), 
+                    p2_range.reshape(1, -1)
+                )
+                
+                if p1_values is not None and p2_values is not None:
+                    level_cfvs[0, 0, 0, 0, :] = p1_values.flatten()
+                    level_cfvs[0, 0, 0, 1, :] = p2_values.flatten()
     
     def _compute_cfvs(self):
         """Compute counterfactual values via backward induction."""
