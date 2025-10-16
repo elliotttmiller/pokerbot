@@ -176,13 +176,23 @@ class CardTools:
 
 
 # Convenience instance mirroring Lua module behaviour
-_default_card_tools = CardTools(get_game_settings("leduc"))
+_default_card_tools = CardTools(get_game_settings("holdem"))
 
 
-def get_card_tools(game_variant: str = "leduc") -> CardTools:
-    """Factory returning cached `CardTools` for the requested variant."""
-    if game_variant.lower() == "leduc":
+def get_card_tools(game_variant: str = "holdem") -> CardTools:
+    """Factory returning cached `CardTools` for the requested variant.
+    
+    Args:
+        game_variant: Game variant ('holdem' or 'leduc'). 
+                     Defaults to 'holdem' for Texas Hold'em.
+    
+    Returns:
+        CardTools instance configured for the variant.
+    """
+    if game_variant.lower() == "holdem":
         return _default_card_tools
+    elif game_variant.lower() == "leduc":
+        return CardTools(get_game_settings("leduc"))
     return CardTools(get_game_settings(game_variant))
 
 

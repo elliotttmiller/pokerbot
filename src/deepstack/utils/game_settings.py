@@ -1,6 +1,7 @@
 """Game configuration values for DeepStack variants.
 
-Currently supports Leduc Hold'em as the default configuration.
+Texas Hold'em is the primary configuration for production play.
+Leduc Hold'em is available for testing and legacy compatibility.
 """
 from __future__ import annotations
 
@@ -25,13 +26,14 @@ class GameSettings:
 
 # Predefined settings for supported variants.
 _VARIANT_SETTINGS: Dict[str, GameSettings] = {
-    "leduc": GameSettings(),
-    # Placeholders for future variants. Parameters follow standard Hold'em sizing.
+    # Texas Hold'em: Primary variant for production play
     "holdem": GameSettings(suit_count=4, rank_count=13, board_card_count=5, player_count=2),
+    # Leduc Hold'em: Available for testing and legacy compatibility
+    "leduc": GameSettings(suit_count=2, rank_count=3, board_card_count=1, player_count=2),
 }
 
 
-def get_game_settings(variant: str = "leduc") -> GameSettings:
+def get_game_settings(variant: str = "holdem") -> GameSettings:
     """Retrieve immutable game settings for the requested variant.
 
     Args:

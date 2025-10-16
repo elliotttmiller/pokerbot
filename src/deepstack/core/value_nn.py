@@ -30,18 +30,19 @@ class ValueNetwork(nn.Module):
         
         Args:
             num_hands: Number of hand buckets (169 for Hold'em, 6 for Leduc)
-            hidden_sizes: List of hidden layer sizes (default: [512, 512, 512, 512])
+            hidden_sizes: List of hidden layer sizes 
+                         (default: [500, 500, 500, 500, 500, 500, 500] for Hold'em per DeepStack paper)
         """
         super().__init__()
         
         self.num_hands = num_hands
         if hidden_sizes is None:
             if num_hands <= 6:
-                # Leduc: smaller network
+                # Leduc: smaller network (paper specification)
                 hidden_sizes = [50, 50, 50]
             else:
-                # Hold'em: larger network
-                hidden_sizes = [512, 512, 512, 512]
+                # Hold'em: 7 layers × 500 units (DeepStack paper Table S2)
+                hidden_sizes = [500, 500, 500, 500, 500, 500, 500]
         
         # Input: 2 * num_hands (two ranges) + 1 (pot size)
         input_size = 2 * num_hands + 1
@@ -49,12 +50,14 @@ class ValueNetwork(nn.Module):
         # Output: 2 * num_hands (values for each player's hands)
         output_size = 2 * num_hands
         
-        # Build network layers
+        # Build network layers with batch normalization (paper specification)
         layers = []
         prev_size = input_size
         
-        for hidden_size in hidden_sizes:
+        for i, hidden_size in enumerate(hidden_sizes):
             layers.append(nn.Linear(prev_size, hidden_size))
+            # Add batch normalization for stability (DeepStack paper Section S3)
+            layers.append(nn.BatchNorm1d(hidden_size))
             layers.append(nn.PReLU())  # Parametric ReLU
             prev_size = hidden_size
         

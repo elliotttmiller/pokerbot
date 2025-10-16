@@ -17,13 +17,13 @@ class TerminalEquity:
     2. Fold nodes - player folds, opponent wins pot
     """
     
-    def __init__(self, game_variant: str = 'leduc', num_hands: int = 6):
+    def __init__(self, game_variant: str = 'holdem', num_hands: int = 169):
         """
         Initialize TerminalEquity calculator.
         
         Args:
-            game_variant: 'leduc' for Leduc Hold'em, 'holdem' for Texas Hold'em
-            num_hands: Number of possible hands in the game
+            game_variant: 'holdem' (default for Texas Hold'em) or 'leduc' (legacy)
+            num_hands: Number of possible hands (169 for Hold'em, 6 for Leduc)
         """
         self.game_variant = game_variant
         self.num_hands = num_hands
