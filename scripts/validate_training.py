@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 """
-Validation Script for Champion Agent Training
+Validation Script for PokerBot Agent Training
 
-This script validates that the trained Champion Agent is working correctly
+This script validates that the trained PokerBot Agent is working correctly
 and has actually improved through the training process.
 
 Usage:
-    python scripts/validate_training.py --model models/champion_final
-    python scripts/validate_training.py --model models/champion_final --hands 500
+    python scripts/validate_training.py --model models/pokerbot_final
+    python scripts/validate_training.py --model models/pokerbot_final --hands 500
 """
 
 import argparse
@@ -22,14 +22,17 @@ import numpy as np
 # Add parent directory to path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-from src.agents import ChampionAgent, CFRAgent, FixedStrategyAgent, RandomAgent
+from src.agents import create_agent
+from src.agents.cfr_agent import CFRAgent
+from src.agents.fixed_strategy_agent import FixedStrategyAgent
+from src.agents.random_agent import RandomAgent
 # from src.evaluation import Evaluator  # Commented out, module not found
 from src.deepstack.game import GameState
 from src.deepstack.utils import Logger
 
 
 class TrainingValidator:
-    """Validates trained Champion Agent performance."""
+    """Validates trained PokerBot Agent performance."""
     
     def __init__(self, model_path: str, verbose: bool = True):
         """
@@ -44,9 +47,9 @@ class TrainingValidator:
         self.logger = Logger(verbose=verbose)
         
         # Load trained agent
-        self.logger.info("Loading trained Champion Agent...")
-        self.agent = ChampionAgent(name="TrainedChampion", use_pretrained=False)
-        self.agent.load_strategy(model_path)
+        self.logger.info("Loading trained PokerBot Agent...")
+        self.agent = create_agent('pokerbot', name="TrainedPokerBot", use_pretrained=False)
+        self.agent.load_models(model_path)
         self.logger.info("[OK] Agent loaded successfully")
         
         # Create baseline agents for comparison

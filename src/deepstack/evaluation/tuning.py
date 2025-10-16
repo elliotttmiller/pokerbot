@@ -1,7 +1,7 @@
 """Hyperparameter tuning utilities using Optuna (with optional Ray Tune).
 
 This module exposes study runners to tune both baseline DQN agents and the
-champion/elite hybrid agent. Objectives are intentionally lightweight so they
+unified PokerBot agent. Objectives are intentionally lightweight so they
 can be invoked from CI or smoketests without running the full training
 pipeline.
 """
@@ -13,8 +13,10 @@ from typing import Optional, Union
 
 import numpy as np
 
-from src.agents import ChampionAgent, DQNAgent, RandomAgent
-from ..evaluation.trainer import Trainer
+from src.agents import create_agent
+from src.agents.dqn_agent import DQNAgent
+from src.agents.random_agent import RandomAgent
+from ..evaluation.trainer import UnifiedTrainer
 from ..game import Action, GameState
 
 # ---------------------------------------------------------------------------
@@ -57,7 +59,7 @@ def objective(trial, episodes: int, batch_size: int) -> float:
     )
 
     # Train and evaluate
-    trainer = Trainer(agent)
+    trainer = UnifiedTrainer(agent, training_mode='dqn')
     rewards = []
     for ep in range(episodes):
         r = trainer._play_training_hand(ep)
@@ -69,24 +71,24 @@ def objective(trial, episodes: int, batch_size: int) -> float:
     return avg_last
 
 # ---------------------------------------------------------------------------
-# Champion agent objective
+# PokerBot agent objective
 # ---------------------------------------------------------------------------
 
 
 @dataclass
-class ChampionTuningConfig:
-    """Configuration for tuning champion/elite agent ensemble weights."""
+class PokerBotTuningConfig:
+    """Configuration for tuning PokerBot agent ensemble weights."""
 
     hands: int = 30
     batch_size: int = 16
     cfr_warmup: int = 200
-    study_name: str = "champion_tuning"
+    study_name: str = "pokerbot_tuning"
     storage: Optional[str] = None
     direction: str = "maximize"
     use_deepstack: bool = True
 
 
-def _play_quick_hand(agent: ChampionAgent, opponent: RandomAgent) -> float:
+def _play_quick_hand(agent, opponent: RandomAgent) -> float:
     """Simulate a single hand for tuning purposes (lightweight)."""
 
     game = GameState(num_players=2)
@@ -112,7 +114,14 @@ def _play_quick_hand(agent: ChampionAgent, opponent: RandomAgent) -> float:
             stack = player.stack
 
             if current_idx == agent_idx:
-                state = agent._encode_state(hole_cards, community_cards, pot, current_bet, stack, current_bet)
+                # Handle different agent types
+                if hasattr(agent, '_encode_dqn_state'):
+                    state = agent._encode_dqn_state(hole_cards, community_cards, pot, current_bet, stack, current_bet)
+                elif hasattr(agent, '_encode_state'):
+                    state = agent._encode_state(hole_cards, community_cards, pot, current_bet, stack, current_bet)
+                else:
+                    state = np.zeros(120)
+                
                 states.append(state)
                 action, raise_amt = agent.choose_action(hole_cards, community_cards, pot, current_bet, stack, current_bet)
                 if action == Action.FOLD:
@@ -161,22 +170,23 @@ def _play_quick_hand(agent: ChampionAgent, opponent: RandomAgent) -> float:
     return float(reward)
 
 
-def champion_objective(trial, cfg: ChampionTuningConfig) -> float:
-    """Optuna objective targeting ChampionAgent ensemble weights and params."""
+def pokerbot_objective(trial, cfg: PokerBotTuningConfig) -> float:
+    """Optuna objective targeting PokerBot agent ensemble weights and params."""
 
     cfr_weight = trial.suggest_float("cfr_weight", 0.2, 0.6)
     dqn_weight = trial.suggest_float("dqn_weight", 0.2, 0.6)
-    equity_weight = trial.suggest_float("equity_weight", 0.05, 0.4)
+    deepstack_weight = trial.suggest_float("deepstack_weight", 0.1, 0.5)
     epsilon = trial.suggest_float("epsilon", 0.05, 0.4)
     learning_rate = trial.suggest_float("learning_rate", 1e-4, 5e-3, log=True)
     gamma = trial.suggest_float("gamma", 0.90, 0.999)
     cfr_iterations = trial.suggest_int("cfr_iterations", 150, 1200, step=50)
 
-    agent = ChampionAgent(
+    agent = create_agent(
+        'pokerbot',
         use_pretrained=False,
         cfr_weight=cfr_weight,
         dqn_weight=dqn_weight,
-        equity_weight=equity_weight,
+        deepstack_weight=deepstack_weight,
         epsilon=epsilon,
         learning_rate=learning_rate,
         gamma=gamma,
@@ -195,21 +205,22 @@ def champion_objective(trial, cfg: ChampionTuningConfig) -> float:
     for _ in range(cfg.hands):
         reward = _play_quick_hand(agent, opponent)
         rewards.append(reward)
-        if len(agent.memory) >= cfg.batch_size:
-            agent.replay(cfg.batch_size)
+        if hasattr(agent, 'memory') and hasattr(agent, 'replay'):
+            if len(agent.memory) >= cfg.batch_size:
+                agent.replay(cfg.batch_size)
 
     return float(np.mean(rewards)) if rewards else 0.0
 
 
 def run_optuna_study(
     n_trials: int = 20,
-    config: Optional[Union[TuningConfig, ChampionTuningConfig]] = None,
+    config: Optional[Union[TuningConfig, PokerBotTuningConfig]] = None,
     target: str = "dqn",
 ):
     import optuna
 
-    if target == "champion":
-        cfg = config or ChampionTuningConfig()
+    if target == "pokerbot":
+        cfg = config or PokerBotTuningConfig()
     else:
         cfg = config or TuningConfig()
 
@@ -223,8 +234,8 @@ def run_optuna_study(
         load_if_exists=True,
     )
 
-    if target == "champion":
-        study.optimize(lambda t: champion_objective(t, cfg), n_trials=n_trials)
+    if target == "pokerbot":
+        study.optimize(lambda t: pokerbot_objective(t, cfg), n_trials=n_trials)
     else:
         study.optimize(lambda t: objective(t, cfg.episodes, cfg.batch_size), n_trials=n_trials)
     return study
