@@ -51,6 +51,7 @@ _REGISTRY.update({
     'random': _lazy('.random_agent', 'RandomAgent'),
     'search': _lazy('.search_agent', 'SearchAgent'),
     'elite': _lazy('.elite_unified_agent', 'EliteUnifiedAgent'),
+    'pokerbot': _lazy('.pokerbot_agent', 'PokerBotAgent'),
 })
 
 
@@ -90,6 +91,7 @@ __all__ = [
     'SearchAgent',
     'MetaAgent',
     'EliteUnifiedAgent',
+    'PokerBotAgent',
     'get_available_agents',
     'create_agent',
     'register',
