@@ -25,14 +25,18 @@ class TreeCFR:
     Reference: "Regret Minimization in Games with Incomplete Information" (Zinkevich et al.)
     """
     
-    def __init__(self, skip_iterations: int = 0):
+    def __init__(self, skip_iterations: int = 0, use_linear_cfr: bool = True, use_cfr_plus: bool = True):
         """
         Initialize TreeCFR solver.
         
         Args:
             skip_iterations: Number of initial iterations to skip for averaging (warmup)
+            use_linear_cfr: Enable Linear CFR (weight regrets by iteration number for faster convergence)
+            use_cfr_plus: Enable CFR+ (reset negative regrets to 0 for faster convergence)
         """
         self.skip_iterations = skip_iterations
+        self.use_linear_cfr = use_linear_cfr
+        self.use_cfr_plus = use_cfr_plus
         self.iteration = 0
         
         # Storage for regrets and strategies per node
@@ -72,13 +76,21 @@ class TreeCFR:
         for i in range(iter_count):
             self.iteration = i
             
+            # Linear CFR: weight by iteration number (DeepStack paper Section S2.1)
+            iteration_weight = (i + 1) if self.use_linear_cfr else 1.0
+            
             # Traverse tree for each player
             for player_id in range(2):
                 # Create reach probabilities (everyone reaches root with probability 1)
                 reach_probs = np.ones(2)
                 
-                # Run CFR traversal
-                self._cfr_traverse(root, starting_ranges, reach_probs, player_id)
+                # Run CFR traversal with iteration weight
+                self._cfr_traverse(root, starting_ranges, reach_probs, player_id, iteration_weight)
+            
+            # CFR+: Reset negative regrets (DeepStack paper Section S2.2)
+            if self.use_cfr_plus:
+                for node_id in self.regrets:
+                    self.regrets[node_id] = np.maximum(self.regrets[node_id], 0.0)
             
             # Update average strategy (skip initial iterations)
             if i >= self.skip_iterations:
@@ -120,7 +132,7 @@ class TreeCFR:
             self._initialize_tree(child, child_id)
     
     def _cfr_traverse(self, node, ranges: np.ndarray, reach_probs: np.ndarray, 
-                      traversing_player: int, node_id: str = "root") -> np.ndarray:
+                      traversing_player: int, iteration_weight: float = 1.0, node_id: str = "root") -> np.ndarray:
         """
         Traverse tree and update regrets via CFR.
         
@@ -129,6 +141,7 @@ class TreeCFR:
             ranges: Current ranges for both players [2 x num_hands]
             reach_probs: Reach probabilities for both players
             traversing_player: Player whose regrets we're updating (0 or 1)
+            iteration_weight: Weight for Linear CFR (default 1.0, or iteration number)
             node_id: Unique identifier for this node
             
         Returns:
@@ -161,7 +174,7 @@ class TreeCFR:
             
             # Recursively compute child CFVs
             action_cfvs[action_idx] = self._cfr_traverse(
-                child, ranges, new_reach_probs, traversing_player, child_id
+                child, ranges, new_reach_probs, traversing_player, iteration_weight, child_id
             )
         
         # Compute node CFV as strategy-weighted sum
@@ -177,9 +190,10 @@ class TreeCFR:
                 opponent = 1 - current_player
                 weighted_regrets = instant_regrets * reach_probs[opponent]
                 
-                # Accumulate regrets (sum over hands weighted by our reach probability)
+                # Accumulate regrets with Linear CFR weighting (DeepStack paper Section S2.1)
+                # Linear CFR: multiply by iteration number for faster convergence
                 self.regrets[node_id][action_idx] += (
-                    weighted_regrets * ranges[current_player]
+                    weighted_regrets * ranges[current_player] * iteration_weight
                 ).sum()
         
         return node_cfv

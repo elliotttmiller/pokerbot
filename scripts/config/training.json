@@ -2,12 +2,16 @@
   "num_buckets": 36,
   "bucket_count": 36,
   "bet_sizing": [1, 2],
-  "hidden_sizes": [256, 256, 128],
+  "hidden_sizes": [500, 500, 500, 500, 500, 500, 500],
   "activation": "prelu",
   "data_path": "data/deepstacked_training/samples/train_samples",
-  "batch_size": 32,
+  "batch_size": 1000,
   "use_gpu": true,
   "lr": 0.001,
   "epochs": 50,
-  "model_save_dir": "models/pretrained"
+  "model_save_dir": "models/pretrained",
+  "comments": {
+    "hidden_sizes": "7 layers × 500 units per DeepStack paper Table S2",
+    "batch_size": "1000-5000 per paper Section S3.2 (increased from 32 for better gradient estimates)"
+  }
 }
