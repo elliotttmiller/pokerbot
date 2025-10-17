@@ -18,6 +18,14 @@
 2. Or press `Ctrl+F9` (Windows/Linux) or `Cmd+F9` (Mac)
 3. Watch the progress in each cell
 
+### ⚠️ Step 4: Restart Runtime After Cell 2
+**IMPORTANT:** After Cell 2 (dependency installation) completes:
+1. Runtime → Restart runtime
+2. Skip cells 1-2 and continue from Cell 3
+3. This ensures new numpy/pandas versions load correctly
+
+**Why?** Google Colab requires a runtime restart after installing certain packages to avoid binary incompatibility issues.
+
 ## 📊 What Each Cell Does
 
 **Code Cells (execute these):**
