@@ -116,7 +116,10 @@ class ImprovedDataGenerator:
         board = list(np.random.choice(52, num_board_cards, replace=False))
         
         # Sample random pot state
-        if len(board) == 0:
+        # Street mapping: 0 cards -> 0 (preflop), 3 -> 1 (flop), 4 -> 2 (turn), 5 -> 3 (river)
+        street_map = {0: 0, 3: 1, 4: 2, 5: 3}
+        street = street_map.get(len(board), 0)
+        if street == 0:
             # Preflop: small pot
             pot_state = {
                 'street': 0,
@@ -127,7 +130,7 @@ class ImprovedDataGenerator:
             # Postflop: larger pots
             pot_base = 50 * (len(board) + 1)
             pot_state = {
-                'street': len(board) // 3 + 1,
+                'street': street,
                 'bets': [np.random.randint(pot_base, pot_base*3), 
                         np.random.randint(pot_base, pot_base*3)],
                 'current_player': np.random.choice([1, 2])

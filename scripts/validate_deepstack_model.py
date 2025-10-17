@@ -220,6 +220,12 @@ def validate_model(model_path, data_path, num_buckets: int | None = None, batch_
     pred_nonzero = all_predictions[nonzero_mask]
     target_nonzero = all_targets[nonzero_mask]
     
+    # Compute basic coverage diagnostics before filtering
+    total_vals = all_targets.size
+    masked_vals = np.count_nonzero(all_targets == 0)
+    covered_vals = total_vals - masked_vals
+    coverage_ratio = covered_vals / max(1, total_vals)
+
     if len(pred_nonzero) > 0:
         # Compute correlation
         correlation = np.corrcoef(pred_nonzero.flatten(), target_nonzero.flatten())[0, 1]
@@ -230,6 +236,17 @@ def validate_model(model_path, data_path, num_buckets: int | None = None, batch_
         # Compute de-standardized MAE/RMSE (these arrays are de-standardized already)
         mae_ds = np.mean(np.abs(pred_nonzero - target_nonzero))
         rmse_ds = np.sqrt(np.mean((pred_nonzero - target_nonzero) ** 2))
+        # Sign mismatch rate (directional error)
+        sign_mismatch = np.mean(np.sign(pred_nonzero) != np.sign(target_nonzero))
+        # Simple calibration: slope and intercept of least-squares fit target ~ a*pred + b
+        try:
+            x = pred_nonzero.reshape(-1, 1)
+            X = np.concatenate([x, np.ones_like(x)], axis=1)
+            theta, *_ = np.linalg.lstsq(X, target_nonzero.reshape(-1, 1), rcond=None)
+            calib_slope = float(theta[0, 0])
+            calib_bias = float(theta[1, 0])
+        except Exception:
+            calib_slope, calib_bias = float('nan'), float('nan')
         
         print(f"  ✓ Analysis complete")
         print()
@@ -238,8 +255,13 @@ def validate_model(model_path, data_path, num_buckets: int | None = None, batch_
         print(f"    MAE (de-std):      {mae_ds:.6f}")
         print(f"    RMSE (de-std):     {rmse_ds:.6f}")
         print(f"    Avg Relative Err:  {avg_rel_error:.6f} ({avg_rel_error*100:.2f}%)")
+        print(f"    Sign mismatch:     {sign_mismatch:.6f}")
+        print(f"    Calibration:       slope={calib_slope:.4f}, bias={calib_bias:.4f}")
         print(f"    Prediction Range:  [{pred_nonzero.min():.6f}, {pred_nonzero.max():.6f}]")
         print(f"    Target Range:      [{target_nonzero.min():.6f}, {target_nonzero.max():.6f}]")
+        print()
+        print("  Coverage:")
+        print(f"    Non-masked ratio:  {coverage_ratio:.4f} ({covered_vals}/{total_vals})")
         # Per-street correlations if street data is available
         if streets_concat is not None:
             print()
@@ -257,6 +279,13 @@ def validate_model(model_path, data_path, num_buckets: int | None = None, batch_
                     if mask_nonzero.any():
                         corr = np.corrcoef(p[mask_nonzero].flatten(), t[mask_nonzero].flatten())[0, 1]
                         print(f"    Street {street}: corr={corr:.6f} on {mask_nonzero.sum()} values")
+            # Also print street coverage
+            print()
+            print("  Per-street coverage (non-masked counts):")
+            for street in [0, 1, 2, 3]:
+                idx = streets_concat == street
+                count = int((all_targets[idx] != 0).sum())
+                print(f"    Street {street}: {count} values")
         # Concise per-bucket correlation summary (across all samples)
         print()
         print("  Per-bucket correlation summary:")
@@ -297,9 +326,9 @@ def validate_model(model_path, data_path, num_buckets: int | None = None, batch_
                 if not np.isnan(corrs[nb + b]):
                     vals.append(float(corrs[nb + b]))
                 bucket_corrs.append(float(np.mean(vals)) if vals else 0.0)
-            # Write reports next to the model directory (e.g., models/versions/reports)
-            # This avoids duplicating 'models' in the path when a relative model_path is provided.
-            reports_dir = os.path.join(os.path.dirname(model_path), 'reports')
+            # Unified reports directory at repo root: models/reports
+            repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+            reports_dir = os.path.join(repo_root, 'models', 'reports')
             os.makedirs(reports_dir, exist_ok=True)
             out_json = os.path.join(reports_dir, 'per_bucket_corrs.json')
             with open(out_json, 'w') as f:
@@ -309,8 +338,66 @@ def validate_model(model_path, data_path, num_buckets: int | None = None, batch_
                     'bucket_corrs': bucket_corrs
                 }, f, indent=2)
             print(f"  ✓ Exported per-bucket correlations to {out_json}")
+            # Save diagnostics JSON with actionable notes
+            diag = {
+                'correlation': float(correlation),
+                'mae_ds': float(mae_ds),
+                'rmse_ds': float(rmse_ds),
+                'avg_relative_error': float(avg_rel_error),
+                'sign_mismatch_rate': float(sign_mismatch),
+                'calibration': {'slope': calib_slope, 'bias': calib_bias},
+                'coverage_ratio': float(coverage_ratio),
+                'avg_corr_player1_half': avg_p1,
+                'avg_corr_player2_half': avg_p2,
+                'avg_corr_all': avg_all,
+                'worst_dims': [(int(i), float(corrs[int(i)])) for i in worst_idx],
+                'best_dims': [(int(i), float(corrs[int(i)])) for i in best_idx]
+            }
+            try:
+                if streets_concat is not None:
+                    per_street = {}
+                    for s in [0,1,2,3]:
+                        idx = streets_concat == s
+                        if idx.any():
+                            p = all_predictions[idx]
+                            t = all_targets[idx]
+                            nz = (p!=0) & (t!=0)
+                            if nz.any():
+                                per_street[str(s)] = float(np.corrcoef(p[nz].flatten(), t[nz].flatten())[0,1])
+                    diag['per_street_correlation'] = per_street
+            except Exception:
+                pass
+            with open(os.path.join(reports_dir, 'diagnostics.json'), 'w') as f:
+                _json.dump(diag, f, indent=2)
         except Exception as _e:
             print(f"  [WARN] Failed to export per-bucket correlations: {_e}")
+
+        # Print actionable recommendations based on diagnostics
+        print()
+        print("Recommendations:")
+        recs = []
+        if calib_slope < 0.8 or calib_slope > 1.2:
+            recs.append("Model is miscalibrated: adjust learning rate schedule or add EMA/bigger batch; consider temperature scaling in evaluation.")
+        if sign_mismatch > 0.35:
+            recs.append("High sign mismatch: network struggles with directionality; increase CFR iterations and emphasize postflop buckets using derive_bucket_weights.")
+        if avg_all < 0.2 and avg_loss > 0.35:
+            recs.append("Low correlation and high loss: generate more data with higher CFR iterations (>=2000) and train longer on GPU with AMP.")
+        if streets_concat is not None:
+            # Check for under-covered streets
+            street_counts = {}
+            for s in [0,1,2,3]:
+                idx = streets_concat == s
+                street_counts[s] = int((all_targets[idx]!=0).sum())
+            if street_counts.get(1,0) < 1e4 or street_counts.get(3,0) < 1e4:
+                recs.append("Low coverage on flop/river: bias sampling towards later streets or increase dataset size.")
+        if avg_rel_error > 3.0:
+            recs.append("Very high relative error: verify target standardization/denormalization and loss masking; consider lowering Huber delta.")
+        if avg_p1 < 0 or avg_p2 < 0:
+            recs.append("Negative per-player correlations: double-check player-half alignment and mask application.")
+        if not recs:
+            recs.append("Continue training for more epochs with cosine decay and monitor analyzer trends; iterate bucket weighting from latest diagnostics.")
+        for r in recs:
+            print(f"  - {r}")
     
     print()
     print("="*70)

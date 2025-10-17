@@ -3,7 +3,7 @@
 Derive 169-length bucket sampling weights from validator per-bucket correlations.
 
 Usage:
-  python scripts/derive_bucket_weights.py --corr-json models/versions/reports/per_bucket_corrs.json --out C:\path\to\bucket_weights.json --boost 3.0 --bottom 40
+    python scripts/derive_bucket_weights.py --corr-json models/reports/per_bucket_corrs.json --out C:\path\to\bucket_weights.json --boost 3.0 --bottom 40
 
 Logic:
   - Start from ones.

@@ -203,7 +203,10 @@ class DeepStackTrainer:
                 scaling = torch.load(scaling_path, map_location='cpu')
             except Exception:
                 scaling = None
-        self.analyzer = TrainAnalyzer(report_dir=os.path.join(self.versions_dir, 'reports'), scaling=scaling)
+        # Unified reports directory at repo root
+        repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+        unified_reports = os.path.join(repo_root, 'models', 'reports')
+        self.analyzer = TrainAnalyzer(report_dir=unified_reports, scaling=scaling)
 
     def _init_ema(self):
         """Initialize EMA state from current model parameters."""
