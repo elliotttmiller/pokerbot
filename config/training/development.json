@@ -1,0 +1,37 @@
+{
+  "description": "Development iteration training configuration",
+  "num_buckets": 169,
+  "bucket_count": 169,
+  "hidden_sizes": [500, 500, 500, 500, 500, 500, 500],
+  "activation": "prelu",
+  "data_path": "src/train_samples_dev",
+  "batch_size": 512,
+  "effective_batch_size": 2048,
+  "use_gpu": true,
+  "lr": 0.0005,
+  "min_lr": 1e-5,
+  "epochs": 100,
+  "weight_decay": 0.01,
+  "warmup_epochs": 5,
+  "huber_delta": 0.3,
+  "ema_decay": 0.999,
+  "early_stop_patience": 15,
+  "early_stop_min_delta": 1e-6,
+  "use_street_weighting": true,
+  "street_weights": [0.8, 1.0, 1.2, 1.4],
+  "use_torch_compile": false,
+  "deterministic": false,
+  "seed": 42,
+  "versions_dir": "models/versions",
+  "checkpoint_dir": "models/checkpoints",
+  "comments": {
+    "description": "Development configuration for rapid iteration",
+    "batch_size": "Smaller batches for faster iteration",
+    "epochs": "100 epochs sufficient for development",
+    "expected_results": {
+      "correlation": "0.50-0.65",
+      "relative_error": "10-20%"
+    },
+    "data_requirements": "10K+ samples"
+  }
+}

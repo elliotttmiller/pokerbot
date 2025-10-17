@@ -1,0 +1,16 @@
+{
+  "description": "Development iteration data generation configuration",
+  "samples": 10000,
+  "validation_samples": 2000,
+  "cfr_iterations": 1500,
+  "output": "src/train_samples_dev",
+  "championship_bet_sizing": true,
+  "adaptive_cfr": false,
+  "comments": {
+    "samples": "10K samples for development iteration (correlation 0.50-0.65)",
+    "cfr_iterations": "1500 iterations for reasonable quality",
+    "estimated_time": "1-2 hours on modern CPU",
+    "expected_correlation": "0.50-0.65",
+    "expected_quality": "Development"
+  }
+}

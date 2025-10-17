@@ -1,0 +1,38 @@
+{
+  "description": "Production-quality training configuration",
+  "num_buckets": 169,
+  "bucket_count": 169,
+  "hidden_sizes": [500, 500, 500, 500, 500, 500, 500],
+  "activation": "prelu",
+  "data_path": "src/train_samples_production",
+  "batch_size": 1024,
+  "effective_batch_size": 4096,
+  "use_gpu": true,
+  "lr": 0.0005,
+  "min_lr": 1e-6,
+  "epochs": 200,
+  "weight_decay": 0.01,
+  "warmup_epochs": 10,
+  "huber_delta": 0.3,
+  "ema_decay": 0.999,
+  "early_stop_patience": 20,
+  "early_stop_min_delta": 1e-6,
+  "use_street_weighting": true,
+  "street_weights": [0.8, 1.0, 1.2, 1.4],
+  "use_torch_compile": true,
+  "deterministic": false,
+  "seed": 42,
+  "versions_dir": "models/versions",
+  "checkpoint_dir": "models/checkpoints",
+  "comments": {
+    "description": "Production configuration for real-world deployment",
+    "street_weights": "Moderate weighting [0.8, 1.0, 1.2, 1.4]",
+    "early_stop_patience": "20 epochs for production quality",
+    "expected_results": {
+      "correlation": "0.75-0.85",
+      "relative_error": "5-10%",
+      "sign_mismatch": "<12%"
+    },
+    "data_requirements": "100K+ samples with CFR iterations >= 2000"
+  }
+}
