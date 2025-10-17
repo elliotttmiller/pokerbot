@@ -213,8 +213,8 @@ Examples:
         config['samples'] = args.samples
     if args.validation_samples is not None:
         config['validation_samples'] = args.validation_samples
-    if args.cfr_iterations is not None:
-        config['cfr_iterations'] = args.cfr_iterations
+    if args.cfr_iters is not None:
+        config['cfr_iterations'] = args.cfr_iters
     if args.output is not None:
         config['output'] = args.output
     if args.championship_bet_sizing is not None:

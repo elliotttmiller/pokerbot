@@ -39,6 +39,7 @@ import logging
 from pathlib import Path
 from typing import Dict, List, Optional, Any
 import numpy as np
+import optuna
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -395,6 +396,26 @@ def main():
     
     # Save results
     tuner.save_results(args.output)
+
+    # If generation task, also export best params to config/data_generation/parameters
+    if args.task == 'generation' and results and results.get('best_params'):
+        from datetime import datetime
+        out_dir = Path('config') / 'data_generation' / 'parameters'
+        out_dir.mkdir(parents=True, exist_ok=True)
+        ts = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
+        out_path = out_dir / f'optimized_{ts}.json'
+        payload = {
+            'name': f'optimized_{ts}',
+            'samples': int(results['best_params'].get('samples', 100000)),
+            'valid_samples': int(0.1 * int(results['best_params'].get('samples', 100000))),
+            'cfr_iterations': int(results['best_params'].get('cfr_iterations', 2000)),
+            'preflop_weight': float(results['best_params'].get('preflop_weight', 0.2)),
+            'flop_weight': float(results['best_params'].get('flop_weight', 0.33)),
+            'notes': f"Auto-tuned with scripts/auto_tune.py on {ts}. Best score: {results.get('best_score')}"
+        }
+        with open(out_path, 'w') as f:
+            json.dump(payload, f, indent=2)
+        logger.info(f"Exported optimized generation params to {out_path}")
     
     # Print results
     print()

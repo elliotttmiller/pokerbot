@@ -1,0 +1,213 @@
+{
+  "task_type": "generation",
+  "objective_metric": "correlation",
+  "best_params": {
+    "cfr_iterations": 3000,
+    "samples": 100000,
+    "preflop_weight": 0.2632548546379368,
+    "flop_weight": 0.30548469540512013
+  },
+  "best_score": 1,
+  "trial_history": [
+    {
+      "trial_number": 0,
+      "params": {
+        "cfr_iterations": 1750,
+        "samples": 10000,
+        "preflop_weight": 0.13119890406724052,
+        "flop_weight": 0.26161672243363987
+      },
+      "score": 0.39
+    },
+    {
+      "trial_number": 1,
+      "params": {
+        "cfr_iterations": 2750,
+        "samples": 200000,
+        "preflop_weight": 0.26648852816008434,
+        "flop_weight": 0.29246782213565525
+      },
+      "score": 0.95
+    },
+    {
+      "trial_number": 2,
+      "params": {
+        "cfr_iterations": 1250,
+        "samples": 100000,
+        "preflop_weight": 0.15824582803960838,
+        "flop_weight": 0.3723705789444759
+      },
+      "score": 0.65
+    },
+    {
+      "trial_number": 3,
+      "params": {
+        "cfr_iterations": 1250,
+        "samples": 200000,
+        "preflop_weight": 0.13993475643167194,
+        "flop_weight": 0.3528468876827223
+      },
+      "score": 0.65
+    },
+    {
+      "trial_number": 4,
+      "params": {
+        "cfr_iterations": 2250,
+        "samples": 50000,
+        "preflop_weight": 0.28977710745066665,
+        "flop_weight": 0.44312640661491187
+      },
+      "score": 0.6499999999999999
+    },
+    {
+      "trial_number": 5,
+      "params": {
+        "cfr_iterations": 2750,
+        "samples": 100000,
+        "preflop_weight": 0.12440764696895577,
+        "flop_weight": 0.34903538202225404
+      },
+      "score": 0.95
+    },
+    {
+      "trial_number": 6,
+      "params": {
+        "cfr_iterations": 1000,
+        "samples": 10000,
+        "preflop_weight": 0.20401360423556214,
+        "flop_weight": 0.3593420558686559
+      },
+      "score": 0.24
+    },
+    {
+      "trial_number": 7,
+      "params": {
+        "cfr_iterations": 1250,
+        "samples": 10000,
+        "preflop_weight": 0.21957999576221704,
+        "flop_weight": 0.43437484700462337
+      },
+      "score": 0.29000000000000004
+    },
+    {
+      "trial_number": 8,
+      "params": {
+        "cfr_iterations": 1000,
+        "samples": 200000,
+        "preflop_weight": 0.1542698063547792,
+        "flop_weight": 0.4157475018303859
+      },
+      "score": 0.6
+    },
+    {
+      "trial_number": 9,
+      "params": {
+        "cfr_iterations": 1750,
+        "samples": 200000,
+        "preflop_weight": 0.11491012873595417,
+        "flop_weight": 0.44737738732010346
+      },
+      "score": 0.75
+    },
+    {
+      "trial_number": 10,
+      "params": {
+        "cfr_iterations": 3000,
+        "samples": 50000,
+        "preflop_weight": 0.28704765864849957,
+        "flop_weight": 0.26897871172046656
+      },
+      "score": 0.8
+    },
+    {
+      "trial_number": 11,
+      "params": {
+        "cfr_iterations": 3000,
+        "samples": 100000,
+        "preflop_weight": 0.2632548546379368,
+        "flop_weight": 0.30548469540512013
+      },
+      "score": 1
+    },
+    {
+      "trial_number": 12,
+      "params": {
+        "cfr_iterations": 2500,
+        "samples": 100000,
+        "preflop_weight": 0.25199953723870194,
+        "flop_weight": 0.3025227300439827
+      },
+      "score": 0.9
+    },
+    {
+      "trial_number": 13,
+      "params": {
+        "cfr_iterations": 3000,
+        "samples": 100000,
+        "preflop_weight": 0.25051258129287246,
+        "flop_weight": 0.31234533646078433
+      },
+      "score": 1
+    },
+    {
+      "trial_number": 14,
+      "params": {
+        "cfr_iterations": 3000,
+        "samples": 100000,
+        "preflop_weight": 0.23591326866767443,
+        "flop_weight": 0.32475546903956254
+      },
+      "score": 1
+    },
+    {
+      "trial_number": 15,
+      "params": {
+        "cfr_iterations": 2250,
+        "samples": 100000,
+        "preflop_weight": 0.17818692013791976,
+        "flop_weight": 0.31665428698085984
+      },
+      "score": 0.85
+    },
+    {
+      "trial_number": 16,
+      "params": {
+        "cfr_iterations": 2750,
+        "samples": 100000,
+        "preflop_weight": 0.2617415181370873,
+        "flop_weight": 0.2837916347314683
+      },
+      "score": 0.95
+    },
+    {
+      "trial_number": 17,
+      "params": {
+        "cfr_iterations": 3000,
+        "samples": 100000,
+        "preflop_weight": 0.22984152564958285,
+        "flop_weight": 0.3895188881697819
+      },
+      "score": 1
+    },
+    {
+      "trial_number": 18,
+      "params": {
+        "cfr_iterations": 2500,
+        "samples": 100000,
+        "preflop_weight": 0.2986772997336308,
+        "flop_weight": 0.32737072444362697
+      },
+      "score": 0.9
+    },
+    {
+      "trial_number": 19,
+      "params": {
+        "cfr_iterations": 2000,
+        "samples": 50000,
+        "preflop_weight": 0.19572753024498954,
+        "flop_weight": 0.2512508218952645
+      },
+      "score": 0.6
+    }
+  ]
+}

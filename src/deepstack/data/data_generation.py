@@ -32,8 +32,7 @@ from pathlib import Path
 # Ensure project root and src/ are on sys.path and load .env PYTHONPATH
 try:
     from dotenv import load_dotenv
-    # .env is at repo root; this file is at src/deepstack/data/
-    load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), '..', '..', '..', '.env'))
+    load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), '..', '.env'))
     pythonpath = os.environ.get("PYTHONPATH")
     if pythonpath:
         for p in pythonpath.split(os.pathsep):
@@ -42,55 +41,67 @@ try:
 except Exception:
     pass
 
-# Fallback: always add the repo's src/ directory
-src_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
+src_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'src'))
 if src_root not in sys.path:
     sys.path.insert(0, src_root)
 
-# Now that src/ is on sys.path, import utilities
 try:
     from deepstack.utils.hand_buckets import fractional_mask_169
-except Exception as _e:
-    # Fallback: attempt a relative import when executed as a script
+except Exception:
     try:
         from ..utils.hand_buckets import fractional_mask_169  # type: ignore
     except Exception:
         raise
 
+# Top-level globals and helpers for multiprocessing on Windows
+_MP_CONFIG = None
+_MP_TREE_BUILDER = None
+_MP_TERMINAL_EQUITY = None
+
+def _mp_init(config: dict):
+    global _MP_CONFIG, _MP_TREE_BUILDER, _MP_TERMINAL_EQUITY
+    _MP_CONFIG = config
+    try:
+        from deepstack.core.tree_builder import PokerTreeBuilder
+        from deepstack.core.terminal_equity import TerminalEquity
+        _MP_TREE_BUILDER = PokerTreeBuilder(game_variant='holdem')
+        _MP_TERMINAL_EQUITY = TerminalEquity(game_variant='holdem', num_hands=config.get('num_hands', 169), fast_approximation=True)
+    except Exception:
+        _MP_TREE_BUILDER = None
+        _MP_TERMINAL_EQUITY = None
+
+def _mp_worker_entry(idx: int):
+    return ImprovedDataGenerator._worker(_MP_CONFIG, idx)
 
 class ImprovedDataGenerator:
     """
     Generates training data by solving random poker situations.
-    
-    Per DeepStack paper Section S3.1:
-    "We generate training data by sampling random poker situations and solving
-    each with CFR. The neural network is then trained to predict these solutions."
-    
+    Per DeepStack paper Section S3.1.
     Championship-level enhancements:
     - Per-street bet sizing abstractions
     - Adaptive CFR iterations based on game complexity
     - Strategic range sampling
     """
-    
-    # Championship-level bet sizing per street (pot-relative)
-    # Based on research from g5-poker-bot and DeepStack hand histories
+
     BET_SIZING_CHAMPIONSHIP = {
-        0: [0.5, 1.0, 2.0, 4.0],           # Preflop: wider range including 3-bets, 4-bets
-        1: [0.33, 0.5, 0.75, 1.0, 1.5],    # Flop: common c-bet sizes
-        2: [0.5, 0.75, 1.0, 1.5],          # Turn: focused sizes
-        3: [0.5, 0.75, 1.0, 2.0],          # River: polarized (value/bluff)
+        0: [0.5, 1.0, 2.0, 4.0],
+        1: [0.33, 0.5, 0.75, 1.0, 1.5],
+        2: [0.5, 0.75, 1.0, 1.5],
+        3: [0.5, 0.75, 1.0, 2.0],
     }
-    
+
     def __init__(self,
                  num_hands: int = 169,
                  cfr_iterations: int = 1000,
                  verbose: bool = True,
                  bucket_sampling_weights: Optional[np.ndarray] = None,
                  use_per_street_bet_sizing: bool = True,
-                 use_adaptive_cfr: bool = False):
+                 use_adaptive_cfr: bool = False,
+                 street_sampling_weights: Optional[object] = None,
+                 bet_sizing_override: Optional[dict] = None):
         """
         Initialize data generator.
-        
+
         Args:
             num_hands: Number of hand buckets (169 for Texas Hold'em)
             cfr_iterations: CFR iterations per situation (paper uses 1000+, recommend 2000+)
@@ -104,8 +115,66 @@ class ImprovedDataGenerator:
         self.verbose = verbose
         self.use_per_street_bet_sizing = use_per_street_bet_sizing
         self.use_adaptive_cfr = use_adaptive_cfr
-        
-        # Optional per-bucket sampling weights (length num_hands), non-negative. Used to bias range sampling.
+        # Normalize street sampling weights -> probabilities over [preflop, flop, turn, river]
+        def _normalize_street_weights(weights_obj: Optional[object]) -> np.ndarray:
+            # Accept dict with keys ('preflop','flop','turn','river') or 0..3, or list/tuple of 4 numbers
+            default = np.array([0.20, 0.35, 0.25, 0.20], dtype=np.float64)
+            if weights_obj is None:
+                return default
+            try:
+                if isinstance(weights_obj, (list, tuple, np.ndarray)) and len(weights_obj) == 4:
+                    arr = np.asarray(weights_obj, dtype=np.float64)
+                elif isinstance(weights_obj, dict):
+                    # Try name keys first
+                    keys_name = ['preflop', 'flop', 'turn', 'river']
+                    if any(k in weights_obj for k in keys_name):
+                        arr = np.array([
+                            float(weights_obj.get('preflop', 0.0)),
+                            float(weights_obj.get('flop', 0.0)),
+                            float(weights_obj.get('turn', 0.0)),
+                            float(weights_obj.get('river', 0.0)),
+                        ], dtype=np.float64)
+                    else:
+                        # Fallback to numeric keys 0..3
+                        arr = np.array([
+                            float(weights_obj.get(0, 0.0)),
+                            float(weights_obj.get(1, 0.0)),
+                            float(weights_obj.get(2, 0.0)),
+                            float(weights_obj.get(3, 0.0)),
+                        ], dtype=np.float64)
+                else:
+                    return default
+                arr = np.clip(arr, 0.0, None)
+                s = float(arr.sum())
+                if s <= 0:
+                    return default
+                return (arr / s).astype(np.float64)
+            except Exception:
+                return default
+        self.street_probs = _normalize_street_weights(street_sampling_weights)
+        # Optional bet sizing override per street
+        def _normalize_bet_override(obj: Optional[dict]) -> Optional[dict]:
+            if not isinstance(obj, dict):
+                return None
+            out = {}
+            name_to_idx = {'preflop': 0, 'flop': 1, 'turn': 2, 'river': 3}
+            for k, v in obj.items():
+                try:
+                    if isinstance(k, str) and k.lower() in name_to_idx:
+                        idx = name_to_idx[k.lower()]
+                    else:
+                        idx = int(k)
+                    if not isinstance(v, (list, tuple, np.ndarray)):
+                        continue
+                    arr = [float(x) for x in v if float(x) > 0]
+                    if not arr:
+                        continue
+                    out[int(idx)] = arr
+                except Exception:
+                    continue
+            return out or None
+        self.bet_sizing_override = _normalize_bet_override(bet_sizing_override)
+
         if bucket_sampling_weights is not None:
             w = np.asarray(bucket_sampling_weights, dtype=np.float64)
             if w.shape[0] != num_hands:
@@ -116,147 +185,90 @@ class ImprovedDataGenerator:
             self.bucket_weights = (w / w.sum()).astype(np.float64)
         else:
             self.bucket_weights = None
-        
-        # Import here to avoid circular dependencies
+
         try:
             from deepstack.core.tree_builder import PokerTreeBuilder
-            from deepstack.core.tree_cfr import TreeCFR
             from deepstack.core.terminal_equity import TerminalEquity
-
             self.tree_builder = PokerTreeBuilder(game_variant='holdem')
-            # Use fast approximation for quick data generation (100x speedup)
-            # For championship-level, set fast_approximation=False and pre-compute equity tables
             self.terminal_equity = TerminalEquity(game_variant='holdem', num_hands=num_hands, fast_approximation=True)
         except ImportError as e:
             if verbose:
                 print(f"[WARNING] Could not import DeepStack components: {e}")
                 print("[WARNING] Using placeholder generation (NOT championship-level)")
             self.tree_builder = None
-    
+
     def sample_random_situation(self) -> dict:
-        """
-        Sample a random poker situation.
-        
-        Returns:
-            Dict with keys: board, pot_state, player_range, opponent_range
-        """
-        # Bias sampling towards later streets for better coverage
-        # DeepStack paper emphasizes training on all streets
-        # Distribution: 20% preflop, 35% flop, 25% turn, 20% river
-        num_board_cards = np.random.choice([0, 3, 4, 5], p=[0.20, 0.35, 0.25, 0.20])
+        """Sample a random poker situation."""
+        # Choose street using configured probabilities, then map to board-card count
+        street_idx = int(np.random.choice([0, 1, 2, 3], p=self.street_probs))
+        street_to_board = {0: 0, 1: 3, 2: 4, 3: 5}
+        num_board_cards = street_to_board.get(street_idx, 0)
         board = list(np.random.choice(52, num_board_cards, replace=False))
-        
-        # Sample random pot state
-        # Street mapping: 0 cards -> 0 (preflop), 3 -> 1 (flop), 4 -> 2 (turn), 5 -> 3 (river)
         street_map = {0: 0, 3: 1, 4: 2, 5: 3}
         street = street_map.get(len(board), 0)
         if street == 0:
-            # Preflop: small pot
             pot_state = {
                 'street': 0,
                 'bets': [np.random.randint(10, 50), np.random.randint(10, 50)],
                 'current_player': np.random.choice([1, 2])
             }
         else:
-            # Postflop: larger pots with more variance
             pot_base = 50 * (len(board) + 1)
             pot_variance = pot_base * 2
             pot_state = {
                 'street': street,
-                'bets': [np.random.randint(pot_base, pot_base + pot_variance), 
-                        np.random.randint(pot_base, pot_base + pot_variance)],
+                'bets': [np.random.randint(pot_base, pot_base + pot_variance),
+                         np.random.randint(pot_base, pot_base + pot_variance)],
                 'current_player': np.random.choice([1, 2])
             }
-        
-        # Sample random ranges (initially uniform, add some variation)
         player_range = self._sample_range()
         opponent_range = self._sample_range()
-        
         return {
             'board': board,
             'pot_state': pot_state,
             'player_range': player_range,
             'opponent_range': opponent_range
         }
-    
-    def _sample_range(self) -> np.ndarray:
-        """Sample a range with optional bucket-weight bias.
 
-        Strategy:
-          - If bucket weights provided, draw a Dirichlet with alpha = base + scale * weights
-            to bias probability mass towards targeted buckets, else fall back to uniform/dirichlet mix.
-        """
+    def _sample_range(self) -> np.ndarray:
+        """Sample a range with optional bucket-weight bias."""
         if self.bucket_weights is not None:
-            base = 1.0  # base concentration
-            scale = 8.0  # strength of bias
+            base = 1.0
+            scale = 8.0
             alpha = base + scale * (self.bucket_weights * self.num_hands)
-            # Numerical guard
             alpha = np.maximum(alpha, 1e-3)
             r = np.random.dirichlet(alpha)
             return r.astype(np.float32)
-        # No weights: original behavior
         if np.random.random() < 0.7:
             return (np.ones(self.num_hands, dtype=np.float32) / self.num_hands)
         else:
             r = np.random.dirichlet(np.ones(self.num_hands, dtype=np.float64) * 2.0)
             return r.astype(np.float32)
-    
+
     def _get_adaptive_cfr_iterations(self, street: int, pot_size: int) -> int:
-        """
-        Get adaptive CFR iterations based on situation complexity.
-        
-        Championship-level enhancement from g5-poker-bot insights:
-        - Later streets need more iterations (larger game trees)
-        - Bigger pots need more accuracy (more important situations)
-        
-        Args:
-            street: Current street (0=preflop, 1=flop, 2=turn, 3=river)
-            pot_size: Total pot size
-            
-        Returns:
-            Number of CFR iterations for this situation
-        """
-        # Base iterations per street (later streets = bigger trees)
         base_iterations = {
-            0: int(self.cfr_iterations * 0.75),  # Preflop: 75% of base
-            1: int(self.cfr_iterations * 0.90),  # Flop: 90% of base
-            2: int(self.cfr_iterations * 1.00),  # Turn: 100% of base
-            3: int(self.cfr_iterations * 1.20),  # River: 120% of base
+            0: int(self.cfr_iterations * 0.75),
+            1: int(self.cfr_iterations * 0.90),
+            2: int(self.cfr_iterations * 1.00),
+            3: int(self.cfr_iterations * 1.20),
         }
-        
         base = base_iterations.get(street, self.cfr_iterations)
-        
-        # Adjust for pot size (bigger pots = more important)
-        # Normalize pot by stack size (1000 chips)
-        pot_multiplier = 1.0 + min(pot_size / 1000.0, 0.3)  # Up to 30% increase
-        
-        return max(1000, int(base * pot_multiplier))  # Minimum 1000 iterations
-    
+        pot_multiplier = 1.0 + min(pot_size / 1000.0, 0.3)
+        return max(1000, int(base * pot_multiplier))
+
     def solve_situation(self, situation: dict) -> Tuple[np.ndarray, np.ndarray]:
-        """
-        Solve a poker situation using CFR.
-        
-        Args:
-            situation: Dict from sample_random_situation()
-            
-        Returns:
-            Tuple of (inputs, targets):
-            - inputs: [player_range, opponent_range, pot_features] 
-            - targets: [player_cfvs, opponent_cfvs]
-        """
         if self.tree_builder is None:
-            # Fallback to placeholder (NOT correct, just for structure)
             return self._placeholder_solve(situation)
-        
-        # Build lookahead tree from situation
         street = situation['pot_state']['street']
-        
-        # Championship-level: Use per-street bet sizing if enabled
         if self.use_per_street_bet_sizing:
-            bet_sizing = self.BET_SIZING_CHAMPIONSHIP.get(street, [1.0])
+            # Use override if present, otherwise default championship sizing
+            bet_sizing = None
+            if self.bet_sizing_override is not None:
+                bet_sizing = self.bet_sizing_override.get(street)
+            if not bet_sizing:
+                bet_sizing = self.BET_SIZING_CHAMPIONSHIP.get(street, [1.0])
         else:
-            bet_sizing = [1.0]  # Simple pot-sized bets
-        
+            bet_sizing = [1.0]
         tree_params = {
             'street': street,
             'bets': situation['pot_state']['bets'],
@@ -265,154 +277,325 @@ class ImprovedDataGenerator:
             'limit_to_street': True,
             'bet_sizing': bet_sizing
         }
-        
         try:
             tree_root = self.tree_builder.build_tree(tree_params)
-            
-            # Adaptive CFR iterations based on situation complexity
             if self.use_adaptive_cfr:
                 cfr_iters = self._get_adaptive_cfr_iterations(street, sum(situation['pot_state']['bets']))
             else:
                 cfr_iters = self.cfr_iterations
-            
-            # Set up CFR solver with proper warmup (skip first 400 iterations for averaging)
             from deepstack.core.tree_cfr import TreeCFR
-            # REUSE terminal equity instance (CRITICAL for performance - avoids recomputing equity matrices)
-            skip_iters = max(200, cfr_iters // 5)  # Skip first 20% for strategy averaging
+            skip_iters = max(200, cfr_iters // 5)
             cfr_solver = TreeCFR(skip_iterations=skip_iters, use_linear_cfr=True, use_cfr_plus=True, terminal_equity=self.terminal_equity)
-            
-            # Prepare starting ranges
             starting_ranges = np.array([
                 situation['player_range'],
                 situation['opponent_range']
             ])
-            
-            # Solve with CFR
-            result = cfr_solver.run_cfr(tree_root, starting_ranges, cfr_iters)
-            # Evaluate CFVs at root for both players using the current average strategy
-            # Player 1 CFV vector at root
+            _ = cfr_solver.run_cfr(tree_root, starting_ranges, cfr_iters)
             player_cfvs = cfr_solver.evaluate_cfv(tree_root, starting_ranges, player=0)
             opponent_cfvs = cfr_solver.evaluate_cfv(tree_root, starting_ranges, player=1)
-            
         except Exception as e:
             if self.verbose:
                 print(f"[WARNING] CFR solve failed: {e}, using placeholder")
             return self._placeholder_solve(situation)
-        
-        # Prepare input features
-        pot_size = sum(situation['pot_state']['bets'])
-        pot_features = np.array([pot_size / 1000.0], dtype=np.float32)  # Normalize pot size
-        # Street one-hot (0=pre,1=flop,2=turn,3=river)
-        street = int(situation['pot_state'].get('street', 0))
-        street_oh = np.zeros((4,), dtype=np.float32)
-        if 0 <= street <= 3:
-            street_oh[street] = 1.0
-        # Board 52-card one-hot
-        board_oh = np.zeros((52,), dtype=np.float32)
-        for c in situation.get('board', []) or []:
-            if 0 <= int(c) < 52:
-                board_oh[int(c)] = 1.0
-        
-        inputs = np.concatenate([
-            situation['player_range'].astype(np.float32),
-            situation['opponent_range'].astype(np.float32), 
-            pot_features,
-            street_oh,
-            board_oh
-        ])
-        
-        # Prepare target values
-        targets = np.concatenate([player_cfvs, opponent_cfvs])
-        
-        return inputs, targets
-    
-    def _placeholder_solve(self, situation: dict) -> Tuple[np.ndarray, np.ndarray]:
-        """
-        Placeholder solve (temporary - NOT championship-level).
-        Used when CFR components not available.
-        """
         pot_size = sum(situation['pot_state']['bets'])
         pot_features = np.array([pot_size / 1000.0], dtype=np.float32)
-        # Street one-hot
         street = int(situation['pot_state'].get('street', 0))
         street_oh = np.zeros((4,), dtype=np.float32)
         if 0 <= street <= 3:
             street_oh[street] = 1.0
-        # Board one-hot
         board_oh = np.zeros((52,), dtype=np.float32)
         for c in situation.get('board', []) or []:
             if 0 <= int(c) < 52:
                 board_oh[int(c)] = 1.0
-        
         inputs = np.concatenate([
             situation['player_range'].astype(np.float32),
-            situation['opponent_range'].astype(np.float32), 
+            situation['opponent_range'].astype(np.float32),
             pot_features,
             street_oh,
             board_oh
         ])
-        
-        # Placeholder targets (NOT correct - just for structure)
-        targets = np.random.randn(2 * self.num_hands) * 10
-        
+        targets = np.concatenate([player_cfvs, opponent_cfvs])
         return inputs, targets
-    
-    def generate_dataset(self, 
-                        num_samples: int,
-                        output_path: str,
-                        dataset_type: str = 'train') -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+
+    def _placeholder_solve(self, situation: dict) -> Tuple[np.ndarray, np.ndarray]:
+        pot_size = sum(situation['pot_state']['bets'])
+        pot_features = np.array([pot_size / 1000.0], dtype=np.float32)
+        street = int(situation['pot_state'].get('street', 0))
+        street_oh = np.zeros((4,), dtype=np.float32)
+        if 0 <= street <= 3:
+            street_oh[street] = 1.0
+        board_oh = np.zeros((52,), dtype=np.float32)
+        for c in situation.get('board', []) or []:
+            if 0 <= int(c) < 52:
+                board_oh[int(c)] = 1.0
+        inputs = np.concatenate([
+            situation['player_range'].astype(np.float32),
+            situation['opponent_range'].astype(np.float32),
+            pot_features,
+            street_oh,
+            board_oh
+        ])
+        targets = np.random.randn(2 * self.num_hands) * 10
+        return inputs, targets
+
+    @staticmethod
+    def _sample_range_static(bucket_weights: Optional[np.ndarray], num_hands: int) -> np.ndarray:
+        if bucket_weights is not None:
+            base = 1.0
+            scale = 8.0
+            alpha = base + scale * (bucket_weights * num_hands)
+            alpha = np.maximum(alpha, 1e-3)
+            r = np.random.dirichlet(alpha)
+            return r.astype(np.float32)
+        if np.random.random() < 0.7:
+            return (np.ones(num_hands, dtype=np.float32) / num_hands)
+        else:
+            r = np.random.dirichlet(np.ones(num_hands, dtype=np.float64) * 2.0)
+            return r.astype(np.float32)
+
+    @staticmethod
+    def _worker(config: dict, i: int) -> Tuple[np.ndarray, np.ndarray, np.ndarray, int]:
+        # Seed per index for reproducibility
+        np.random.seed((os.getpid() + i) % 2**32)
+        num_hands = config['num_hands']
+        bucket_weights = config.get('bucket_weights')
+        use_per_street_bet_sizing = config.get('use_per_street_bet_sizing', True)
+        use_adaptive_cfr = config.get('use_adaptive_cfr', False)
+        cfr_iterations = config['cfr_iterations']
+        verbose = config.get('verbose', False)
+        # Sample situation with street probabilities
+        street_probs = np.asarray(config.get('street_probs', [0.20, 0.35, 0.25, 0.20]), dtype=np.float64)
+        if street_probs.shape != (4,):
+            street_probs = np.array([0.20, 0.35, 0.25, 0.20], dtype=np.float64)
+        street_idx = int(np.random.choice([0, 1, 2, 3], p=street_probs))
+        street_to_board = {0: 0, 1: 3, 2: 4, 3: 5}
+        num_board_cards = street_to_board.get(street_idx, 0)
+        board = list(np.random.choice(52, num_board_cards, replace=False))
+        street_map = {0: 0, 3: 1, 4: 2, 5: 3}
+        street = street_map.get(len(board), 0)
+        if street == 0:
+            pot_state = {
+                'street': 0,
+                'bets': [np.random.randint(10, 50), np.random.randint(10, 50)],
+                'current_player': np.random.choice([1, 2])
+            }
+        else:
+            pot_base = 50 * (len(board) + 1)
+            pot_variance = pot_base * 2
+            pot_state = {
+                'street': street,
+                'bets': [np.random.randint(pot_base, pot_base + pot_variance),
+                         np.random.randint(pot_base, pot_base + pot_variance)],
+                'current_player': np.random.choice([1, 2])
+            }
+        player_range = ImprovedDataGenerator._sample_range_static(bucket_weights, num_hands)
+        opponent_range = ImprovedDataGenerator._sample_range_static(bucket_weights, num_hands)
+        situation = {
+            'board': board,
+            'pot_state': pot_state,
+            'player_range': player_range,
+            'opponent_range': opponent_range
+        }
+        # Solve
+        try:
+            from deepstack.core.tree_cfr import TreeCFR
+            # Use cached instances if available (set in initializer)
+            global _MP_TREE_BUILDER, _MP_TERMINAL_EQUITY
+            if _MP_TREE_BUILDER is None or _MP_TERMINAL_EQUITY is None:
+                from deepstack.core.tree_builder import PokerTreeBuilder
+                from deepstack.core.terminal_equity import TerminalEquity
+                tree_builder = PokerTreeBuilder(game_variant='holdem')
+                terminal_equity = TerminalEquity(game_variant='holdem', num_hands=num_hands, fast_approximation=True)
+            else:
+                tree_builder = _MP_TREE_BUILDER
+                terminal_equity = _MP_TERMINAL_EQUITY
+            if use_per_street_bet_sizing:
+                # Respect override if provided via config
+                override = config.get('bet_sizing_override')
+                bet_sizing = None
+                if isinstance(override, dict):
+                    # keys as str or int
+                    if str(street) in override:
+                        bet_sizing = override[str(street)]
+                    elif street in override:
+                        bet_sizing = override[street]
+                if not bet_sizing:
+                    bet_sizing = ImprovedDataGenerator.BET_SIZING_CHAMPIONSHIP.get(street, [1.0])
+            else:
+                bet_sizing = [1.0]
+            tree_params = {
+                'street': street,
+                'bets': pot_state['bets'],
+                'current_player': pot_state['current_player'],
+                'board': board,
+                'limit_to_street': True,
+                'bet_sizing': bet_sizing
+            }
+            tree_root = tree_builder.build_tree(tree_params)
+            if use_adaptive_cfr:
+                # Same heuristic
+                base_iterations = {0: int(cfr_iterations * 0.75), 1: int(cfr_iterations * 0.90), 2: int(cfr_iterations * 1.00), 3: int(cfr_iterations * 1.20)}
+                base = base_iterations.get(street, cfr_iterations)
+                pot_multiplier = 1.0 + min(sum(pot_state['bets']) / 1000.0, 0.3)
+                cfr_iters = max(1000, int(base * pot_multiplier))
+            else:
+                cfr_iters = cfr_iterations
+            skip_iters = max(200, cfr_iters // 5)
+            cfr_solver = TreeCFR(skip_iterations=skip_iters, use_linear_cfr=True, use_cfr_plus=True, terminal_equity=terminal_equity)
+            starting_ranges = np.array([player_range, opponent_range])
+            _ = cfr_solver.run_cfr(tree_root, starting_ranges, cfr_iters)
+            player_cfvs = cfr_solver.evaluate_cfv(tree_root, starting_ranges, player=0)
+            opponent_cfvs = cfr_solver.evaluate_cfv(tree_root, starting_ranges, player=1)
+        except Exception as e:
+            if verbose:
+                print(f"[WARNING] Worker CFR solve failed: {e}, using placeholder")
+            # Placeholder
+            pot_size = sum(pot_state['bets'])
+            pot_features = np.array([pot_size / 1000.0], dtype=np.float32)
+            street_oh = np.zeros((4,), dtype=np.float32)
+            if 0 <= street <= 3:
+                street_oh[street] = 1.0
+            board_oh = np.zeros((52,), dtype=np.float32)
+            for c in board or []:
+                if 0 <= int(c) < 52:
+                    board_oh[int(c)] = 1.0
+            inputs = np.concatenate([
+                player_range.astype(np.float32),
+                opponent_range.astype(np.float32),
+                pot_features,
+                street_oh,
+                board_oh
+            ])
+            targets = np.random.randn(2 * num_hands) * 10
+            from deepstack.utils.hand_buckets import fractional_mask_169 as _frac
+            frac169 = np.array(_frac(board), dtype=np.float32)
+            per_player = frac169 if frac169.shape[0] == num_hands else np.ones((num_hands,), dtype=np.float32)
+            mask = np.concatenate([per_player, per_player]).astype(np.float32)
+            return inputs, targets, mask, street
+        # Build inputs/targets
+        pot_size = sum(pot_state['bets'])
+        pot_features = np.array([pot_size / 1000.0], dtype=np.float32)
+        street_oh = np.zeros((4,), dtype=np.float32)
+        if 0 <= street <= 3:
+            street_oh[street] = 1.0
+        board_oh = np.zeros((52,), dtype=np.float32)
+        for c in board or []:
+            if 0 <= int(c) < 52:
+                board_oh[int(c)] = 1.0
+        inputs = np.concatenate([
+            player_range.astype(np.float32),
+            opponent_range.astype(np.float32),
+            pot_features,
+            street_oh,
+            board_oh
+        ])
+        targets = np.concatenate([player_cfvs, opponent_cfvs])
+        from deepstack.utils.hand_buckets import fractional_mask_169 as _frac
+        frac169 = np.array(_frac(board), dtype=np.float32)
+        per_player = frac169 if frac169.shape[0] == num_hands else np.ones((num_hands,), dtype=np.float32)
+        mask = np.concatenate([per_player, per_player]).astype(np.float32)
+        return inputs, targets, mask, street
+
+    def generate_dataset(self,
+                         num_samples: int,
+                         output_path: str,
+                         dataset_type: str = 'train',
+                         use_multiprocessing: bool = True,
+                         profile: bool = False) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
         """
-        Generate a complete dataset.
-        
-        Args:
-            num_samples: Number of training examples to generate
-            output_path: Path to save dataset
-            dataset_type: 'train' or 'valid'
+        Generate a complete dataset. If use_multiprocessing=True, uses Pool for parallel sample generation.
         """
         if self.verbose:
             print(f"Generating {dataset_type} dataset: {num_samples} samples")
             print(f"CFR iterations per sample: {self.cfr_iterations}")
-        
-        # Allocate arrays
-        # Inputs now include: player_range (169), opponent_range (169), pot (1), street one-hot (4), board one-hot (52)
+
         input_size = 2 * self.num_hands + 1 + 4 + 52
         output_size = 2 * self.num_hands
-
         inputs = np.zeros((num_samples, input_size), dtype=np.float32)
         targets = np.zeros((num_samples, output_size), dtype=np.float32)
         masks = np.ones((num_samples, output_size), dtype=np.float32)
         streets = np.zeros((num_samples,), dtype=np.int64)
 
-        # Generate samples with progress bar
-        try:
-            from tqdm import tqdm
-            iterator = tqdm(range(num_samples), desc=f"Generating {dataset_type} samples", unit="sample")
-        except ImportError:
-            # Fallback if tqdm not available
-            iterator = range(num_samples)
-            if self.verbose:
-                print(f"  Note: Install tqdm for progress bars (pip install tqdm)")
-        
-        for i in iterator:
-            # Sample and solve random situation
-            situation = self.sample_random_situation()
-            inputs[i], targets[i] = self.solve_situation(situation)
-            streets[i] = situation['pot_state']['street'] if 'pot_state' in situation else 0
+        # Progress iterator (only for sequential path)
+        iterator = None
+        if not use_multiprocessing:
+            try:
+                from tqdm import tqdm
+                iterator = tqdm(range(num_samples), desc=f"Generating {dataset_type} samples", unit="sample")
+            except Exception:
+                iterator = range(num_samples)
+                if self.verbose:
+                    print("Note: Install tqdm for progress bars (pip install tqdm)")
 
-            # Per-street board-aware fractional mask (169 per player -> tile to 2*169)
-            board = situation.get('board', [])
-            frac169 = np.array(fractional_mask_169(board), dtype=np.float32)
-            if frac169.shape[0] != (self.num_hands):
-                # Safety if num_hands != 169; fallback to ones
-                per_player = np.ones((self.num_hands,), dtype=np.float32)
-            else:
-                per_player = frac169
-            # Duplicate for both players
-            masks[i, :self.num_hands] = per_player
-            masks[i, self.num_hands:] = per_player
+        # Optional profiling (sequential path)
+        pr = None
+        if profile:
+            import cProfile
+            pr = cProfile.Profile()
+            pr.enable()
+
+        if use_multiprocessing:
+            try:
+                from multiprocessing import Pool, cpu_count
+                from tqdm import tqdm as _tqdm
+                config = {
+                    'num_hands': self.num_hands,
+                    'cfr_iterations': self.cfr_iterations,
+                    'verbose': self.verbose,
+                    'bucket_weights': None if self.bucket_weights is None else self.bucket_weights.astype(np.float64),
+                    'use_per_street_bet_sizing': self.use_per_street_bet_sizing,
+                    'use_adaptive_cfr': self.use_adaptive_cfr,
+                    'street_probs': self.street_probs.tolist() if hasattr(self, 'street_probs') else [0.20, 0.35, 0.25, 0.20],
+                    'bet_sizing_override': self.bet_sizing_override,
+                }
+                with Pool(processes=max(1, cpu_count() - 1), initializer=_mp_init, initargs=(config,)) as pool:
+                    results = list(_tqdm(pool.imap_unordered(
+                        _mp_worker_entry,
+                        range(num_samples),
+                        # Small chunksize so results stream quickly and progress is visible early
+                        chunksize=1
+                    ), total=num_samples, desc=f"Generating {dataset_type} samples", unit="sample"))
+                for i, (in_vec, tgt_vec, mask_vec, street) in enumerate(results):
+                    inputs[i] = in_vec
+                    targets[i] = tgt_vec
+                    masks[i] = mask_vec
+                    streets[i] = street
+            except Exception as e:
+                print(f"[WARNING] Multiprocessing failed: {e}. Falling back to sequential generation.")
+                for i in iterator:
+                    situation = self.sample_random_situation()
+                    in_vec, tgt_vec = self.solve_situation(situation)
+                    inputs[i] = in_vec
+                    targets[i] = tgt_vec
+                    streets[i] = situation['pot_state']['street'] if 'pot_state' in situation else 0
+                    board = situation.get('board', [])
+                    frac169 = np.array(fractional_mask_169(board), dtype=np.float32)
+                    per_player = frac169 if frac169.shape[0] == (self.num_hands) else np.ones((self.num_hands,), dtype=np.float32)
+                    masks[i, :self.num_hands] = per_player
+                    masks[i, self.num_hands:] = per_player
+        else:
+            for i in iterator:
+                situation = self.sample_random_situation()
+                in_vec, tgt_vec = self.solve_situation(situation)
+                inputs[i] = in_vec
+                targets[i] = tgt_vec
+                streets[i] = situation['pot_state']['street'] if 'pot_state' in situation else 0
+                board = situation.get('board', [])
+                frac169 = np.array(fractional_mask_169(board), dtype=np.float32)
+                per_player = frac169 if frac169.shape[0] == (self.num_hands) else np.ones((self.num_hands,), dtype=np.float32)
+                masks[i, :self.num_hands] = per_player
+                masks[i, self.num_hands:] = per_player
+
+        if profile and pr is not None:
+            import pstats, io
+            pr.disable()
+            s = io.StringIO()
+            ps = pstats.Stats(pr, stream=s).sort_stats('cumtime')
+            ps.print_stats(25)
+            print("\n[PROFILE] Top functions by cumulative time:\n" + s.getvalue())
 
         if self.verbose:
-            print(f"✓ {dataset_type} dataset generated (not yet saved)")
+            print(f"\u2713 {dataset_type} dataset generated (not yet saved)")
             print(f"  Inputs shape: {inputs.shape}")
             print(f"  Targets shape: {targets.shape}")
 
@@ -428,24 +611,8 @@ def generate_training_data(train_count: int = 10000,
                           use_adaptive_cfr: bool = False) -> None:
     """
     Main function to generate improved training data (Texas Hold'em only).
-    
-    Per DeepStack paper: Generate 10M+ training examples for Texas Hold'em. Each solved with 2000+ CFR iterations.
-    
-    Championship-level enhancements:
-    - Per-street bet sizing abstractions (based on g5-poker-bot and DeepStack research)
-    - Adaptive CFR iterations (optional - adjust based on situation complexity)
-    
-    Args:
-        train_count: Number of training examples
-        valid_count: Number of validation examples  
-        output_path: Path to save data
-        cfr_iterations: CFR iterations per sample (paper recommends 2000+, championship: 2500+)
-        bucket_sampling_weights: Optional weights for adaptive bucket sampling
-        use_championship_bet_sizing: Use per-street bet abstractions (recommended)
-        use_adaptive_cfr: Adjust CFR iterations based on complexity (experimental)
     """
     num_hands = 169
-
     generator = ImprovedDataGenerator(
         num_hands=num_hands,
         cfr_iterations=cfr_iterations,
@@ -454,7 +621,6 @@ def generate_training_data(train_count: int = 10000,
         use_per_street_bet_sizing=use_championship_bet_sizing,
         use_adaptive_cfr=use_adaptive_cfr
     )
-    
     print("="*70)
     print("IMPROVED DATA GENERATION - DeepStack Paper Methodology")
     print("="*70)
@@ -466,48 +632,33 @@ def generate_training_data(train_count: int = 10000,
     print(f"Adaptive CFR iterations: {use_adaptive_cfr}")
     print("="*70)
     print()
-    
-    # Generate datasets in-memory
     valid_inputs, valid_targets, valid_masks, valid_streets = generator.generate_dataset(valid_count, output_path, 'valid')
     print()
-
     train_inputs, train_targets, train_masks, train_streets = generator.generate_dataset(train_count, output_path, 'train')
     print()
-
-    # Compute target scaling statistics from TRAINING targets only (masked)
     eps = 1e-6
-    # weights are fractional masks in [0,1]
     w = train_masks.astype(np.float64)
     x = train_targets.astype(np.float64)
     w_sum = np.clip(w.sum(axis=0), a_min=eps, a_max=None)
     target_mean = (w * x).sum(axis=0) / w_sum
-    # Weighted variance
     var = (w * (x - target_mean) ** 2).sum(axis=0) / w_sum
     target_std = np.sqrt(np.maximum(var, eps*eps))
-
-    # Apply standardization to both train and validation targets
     train_targets_std = (train_targets - target_mean) / target_std
     valid_targets_std = (valid_targets - target_mean) / target_std
-
-    # Save tensors and scaling metadata
     os.makedirs(output_path, exist_ok=True)
-    # Train
     torch.save(torch.from_numpy(train_inputs), os.path.join(output_path, 'train_inputs.pt'))
     torch.save(torch.from_numpy(train_targets_std), os.path.join(output_path, 'train_targets.pt'))
     torch.save(torch.from_numpy(train_masks), os.path.join(output_path, 'train_mask.pt'))
     torch.save(torch.from_numpy(train_streets), os.path.join(output_path, 'train_street.pt'))
-    # Valid
     torch.save(torch.from_numpy(valid_inputs), os.path.join(output_path, 'valid_inputs.pt'))
     torch.save(torch.from_numpy(valid_targets_std), os.path.join(output_path, 'valid_targets.pt'))
     torch.save(torch.from_numpy(valid_masks), os.path.join(output_path, 'valid_mask.pt'))
     torch.save(torch.from_numpy(valid_streets), os.path.join(output_path, 'valid_street.pt'))
-    # Scaling
     scaling = {
         'mean': torch.from_numpy(target_mean.astype(np.float32)),
         'std': torch.from_numpy(target_std.astype(np.float32))
     }
     torch.save(scaling, os.path.join(output_path, 'targets_scaling.pt'))
-    # If sampling weights were used, save for provenance
     if bucket_sampling_weights is not None:
         try:
             import json as _json
@@ -516,7 +667,6 @@ def generate_training_data(train_count: int = 10000,
                 _json.dump(list(map(float, bucket_sampling_weights)), f)
         except Exception:
             pass
-    
     print("="*70)
     print("DATA GENERATION COMPLETE")
     print("="*70)
@@ -535,13 +685,87 @@ def generate_training_data(train_count: int = 10000,
 if __name__ == '__main__':
     import argparse as _argparse
     import json as _json
+    from glob import glob as _glob
+    from datetime import datetime as _dt
+
+    def _repo_path(*parts: str) -> str:
+        return os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '..', *parts))
+
+    def _load_config_from_arg(arg_val: str | None) -> dict:
+        """Load config JSON given a path or the keyword 'latest'.
+        If arg_val is None, returns empty dict.
+        If arg_val == 'latest', finds the most recent *.json under config/data_generation/parameters.
+        """
+        if not arg_val:
+            return {}
+        cfg_dir = _repo_path('config', 'data_generation', 'parameters')
+        if arg_val == 'latest':
+            files = _glob(os.path.join(cfg_dir, '*.json'))
+            if not files:
+                print(f"[INFO] No JSON configs found in {cfg_dir}; proceeding without config.")
+                return {}
+            latest = max(files, key=os.path.getmtime)
+            try:
+                with open(latest, 'r') as f:
+                    return _json.load(f)
+            except Exception as e:
+                print(f"[WARN] Failed to load latest config {latest}: {e}")
+                return {}
+        # Else treat as explicit path
+        path = arg_val
+        if not os.path.isabs(path):
+            # resolve relative to repo root
+            path = os.path.abspath(os.path.join(_repo_path(), path))
+        try:
+            with open(path, 'r') as f:
+                return _json.load(f)
+        except Exception as e:
+            print(f"[WARN] Failed to load config {path}: {e}")
+            return {}
     parser = _argparse.ArgumentParser(description='Generate DeepStack training data')
     parser.add_argument('--train-count', type=int, default=1000)
     parser.add_argument('--valid-count', type=int, default=512)
     parser.add_argument('--cfr-iterations', type=int, default=2000)
     parser.add_argument('--output-path', type=str, default=r'C:/Users/AMD/pokerbot/src/train_samples')
     parser.add_argument('--bucket-weights-path', type=str, default='', help='Path to JSON file with 169 floats for bucket sampling weights')
+    parser.add_argument('--no-mp', action='store_true', help='Disable multiprocessing for generation')
+    parser.add_argument('--profile', action='store_true', help='Enable cProfile in sequential generation')
+    parser.add_argument('--config', nargs='?', const='latest', default=None,
+                        help='Path to parameters JSON (or omit value to use latest in config/data_generation/parameters)')
     args = parser.parse_args()
+
+    # Optionally load config and map to CLI values (CLI takes precedence if provided)
+    cfg = _load_config_from_arg(args.config)
+    if cfg:
+        # Map known fields
+        args.train_count = args.train_count if args.train_count != parser.get_default('train-count') else int(cfg.get('samples', args.train_count))
+        args.valid_count = args.valid_count if args.valid_count != parser.get_default('valid-count') else int(cfg.get('valid_samples', args.valid_count))
+        args.cfr_iterations = args.cfr_iterations if args.cfr_iterations != parser.get_default('cfr-iterations') else int(cfg.get('cfr_iterations', args.cfr_iterations))
+        # Optional: allow config to specify output
+        if 'output_path' in cfg and args.output_path == parser.get_default('output-path'):
+            args.output_path = str(cfg['output_path'])
+        print(f"[INFO] Loaded config parameters: train={args.train_count}, valid={args.valid_count}, cfr_iters={args.cfr_iterations}")
+        # Optional: collect street weights and bet sizing override from config keys
+        street_weights = None
+        # Accept flattened keys or nested mapping
+        if all(k in cfg for k in ('preflop_weight', 'flop_weight', 'turn_weight', 'river_weight')):
+            street_weights = [cfg['preflop_weight'], cfg['flop_weight'], cfg['turn_weight'], cfg['river_weight']]
+        elif 'street_sampling_weights' in cfg:
+            street_weights = cfg.get('street_sampling_weights')
+        elif 'street_weights' in cfg:
+            street_weights = cfg.get('street_weights')
+        elif 'street_probs' in cfg:
+            street_weights = cfg.get('street_probs')
+        elif 'street_distribution' in cfg:
+            street_weights = cfg.get('street_distribution')
+        bet_override = None
+        # analytics export may include 'bet_sizing' or 'bet_sizing_override'
+        if 'bet_sizing_override' in cfg:
+            bet_override = cfg['bet_sizing_override']
+        elif 'bet_sizing' in cfg:
+            bet_override = cfg['bet_sizing']
+        elif 'bet_sizing_recommendation' in cfg:
+            bet_override = cfg['bet_sizing_recommendation']
 
     weights = None
     if args.bucket_weights_path:
@@ -552,10 +776,41 @@ if __name__ == '__main__':
         except Exception as _e:
             print(f"[WARN] Failed to read bucket weights: {args.bucket_weights_path} ({_e})")
 
-    generate_training_data(
-        train_count=args.train_count,
-        valid_count=args.valid_count,
-        output_path=args.output_path,
+    # Run generation
+    gen = ImprovedDataGenerator(
+        num_hands=169,
         cfr_iterations=args.cfr_iterations,
-        bucket_sampling_weights=weights
+        verbose=True,
+        bucket_sampling_weights=weights,
+        use_per_street_bet_sizing=True,
+        use_adaptive_cfr=False,
+        street_sampling_weights=locals().get('street_weights', None),
+        bet_sizing_override=locals().get('bet_override', None),
     )
+    # Generate and save using the helper for consistency
+    valid_inputs, valid_targets, valid_masks, valid_streets = gen.generate_dataset(args.valid_count, args.output_path, 'valid', use_multiprocessing=not args.no_mp, profile=args.profile)
+    train_inputs, train_targets, train_masks, train_streets = gen.generate_dataset(args.train_count, args.output_path, 'train', use_multiprocessing=not args.no_mp, profile=args.profile)
+    # Compute scaling and save
+    eps = 1e-6
+    w = train_masks.astype(np.float64)
+    x = train_targets.astype(np.float64)
+    w_sum = np.clip(w.sum(axis=0), a_min=eps, a_max=None)
+    target_mean = (w * x).sum(axis=0) / w_sum
+    var = (w * (x - target_mean) ** 2).sum(axis=0) / w_sum
+    target_std = np.sqrt(np.maximum(var, eps*eps))
+    train_targets_std = (train_targets - target_mean) / target_std
+    valid_targets_std = (valid_targets - target_mean) / target_std
+    os.makedirs(args.output_path, exist_ok=True)
+    torch.save(torch.from_numpy(train_inputs), os.path.join(args.output_path, 'train_inputs.pt'))
+    torch.save(torch.from_numpy(train_targets_std), os.path.join(args.output_path, 'train_targets.pt'))
+    torch.save(torch.from_numpy(train_masks), os.path.join(args.output_path, 'train_mask.pt'))
+    torch.save(torch.from_numpy(train_streets), os.path.join(args.output_path, 'train_street.pt'))
+    torch.save(torch.from_numpy(valid_inputs), os.path.join(args.output_path, 'valid_inputs.pt'))
+    torch.save(torch.from_numpy(valid_targets_std), os.path.join(args.output_path, 'valid_targets.pt'))
+    torch.save(torch.from_numpy(valid_masks), os.path.join(args.output_path, 'valid_mask.pt'))
+    torch.save(torch.from_numpy(valid_streets), os.path.join(args.output_path, 'valid_street.pt'))
+    scaling = {
+        'mean': torch.from_numpy(target_mean.astype(np.float32)),
+        'std': torch.from_numpy(target_std.astype(np.float32))
+    }
+    torch.save(scaling, os.path.join(args.output_path, 'targets_scaling.pt'))

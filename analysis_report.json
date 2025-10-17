@@ -1,0 +1,28 @@
+{
+  "timestamp": "2025-10-17T07:30:57.687075",
+  "analyses": [
+    {
+      "timestamp": "2025-10-17T07:30:55.330169",
+      "type": "generation",
+      "metrics": {},
+      "insights": [
+        {
+          "category": "data_quality",
+          "level": "error",
+          "message": "Missing files: train_inputs.pt, train_targets.pt, train_mask.pt, valid_inputs.pt, valid_targets.pt",
+          "detail": "Data generation incomplete or failed"
+        }
+      ],
+      "recommendations": [],
+      "score": 0.0
+    }
+  ],
+  "summary": {
+    "total_insights": 1,
+    "total_recommendations": 0,
+    "average_score": 0.0,
+    "overall_status": "poor",
+    "message": "Critical issues detected - immediate action required"
+  },
+  "priority_actions": []
+}

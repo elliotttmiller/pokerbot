@@ -66,7 +66,8 @@ class ConfigEditorServer:
                 self_.send_header('Content-type', 'text/html')
                 self_.end_headers()
                 
-                html = self._generate_editor_html()
+                # Use the helper defined in the outer scope
+                html = _generate_editor_html()
                 self_.wfile.write(html.encode())
             
             def _serve_configs_list(self_):
@@ -133,7 +134,8 @@ class ConfigEditorServer:
                 config = data.get('config')
                 category = data.get('category')
                 
-                validation = self._validate_configuration(config, category)
+                # Call the handler's own validation method
+                validation = self_._validate_configuration(config, category)
                 self_._send_json(validation)
             
             def _send_json(self_, data):

@@ -1,0 +1,9 @@
+{
+  "name": "optimized_2025-10-17",
+  "samples": 100000,
+  "valid_samples": 10000,
+  "cfr_iterations": 3000,
+  "preflop_weight": 0.2632548546379368,
+  "flop_weight": 0.30548469540512013,
+  "notes": "Auto-tuned with scripts/auto_tune.py on 2025-10-17. Best score: 1.0"
+}

@@ -21,7 +21,7 @@ import json
 import re
 from pathlib import Path
 from collections import defaultdict, Counter
-from typing import Dict, List, Tuple
+from typing import Dict, List, Tuple, Optional
 import numpy as np
 
 # Add src to path
@@ -41,6 +41,14 @@ class HandHistoryAnalyzer:
         self.aivat_results = []
         self.lbr_results = []
         
+    @staticmethod
+    def _truthy_cell(val: Optional[str]) -> bool:
+        """Return True if a CSV cell contains meaningful content (not empty or placeholder)."""
+        if val is None:
+            return False
+        s = str(val).strip().lower()
+        return s not in ("", "-", "na", "n/a", "none", "null")
+
     def analyze_aivat_data(self) -> Dict:
         """Analyze AIVAT CSV files for betting patterns and statistics."""
         print("Analyzing AIVAT data...")
@@ -86,10 +94,15 @@ class HandHistoryAnalyzer:
                         if pos in ['bb', 'sb']:
                             stats['by_position'][pos] += 1
                         
-                        # Street progression
-                        has_flop = bool(row.get('Flop Cards', '').strip())
-                        has_turn = bool(row.get('Turn Card', '').strip())
-                        has_river = bool(row.get('River Card', '').strip())
+                        # Street progression (robust to header variations and placeholders)
+                        # Some dumps use different header names; also fall back to action strings.
+                        flop_cards = row.get('Flop Cards') or row.get('FlopCards') or row.get('Flop')
+                        turn_card = row.get('Turn Card') or row.get('TurnCard') or row.get('Turn')
+                        river_card = row.get('River Card') or row.get('RiverCard') or row.get('River')
+
+                        has_flop = self._truthy_cell(flop_cards)
+                        has_turn = self._truthy_cell(turn_card)
+                        has_river = self._truthy_cell(river_card)
                         
                         if has_river:
                             stats['by_street']['to_river'] += 1
@@ -100,11 +113,22 @@ class HandHistoryAnalyzer:
                         else:
                             stats['by_street']['preflop_only'] += 1
                         
-                        # Parse actions
-                        preflop = row.get('Pre-flop', '').strip()
-                        flop = row.get('Flop', '').strip()
-                        turn = row.get('Turn', '').strip()
-                        river = row.get('River', '').strip()
+                        # Parse actions (handle header variants)
+                        preflop = (row.get('Pre-flop') or row.get('Preflop') or '').strip()
+                        flop = (row.get('Flop') or '').strip()
+                        turn = (row.get('Turn') or '').strip()
+                        river = (row.get('River') or '').strip()
+
+                        # If card headers missing but actions present, treat as street reached
+                        if not has_flop and self._truthy_cell(flop):
+                            stats['by_street']['to_flop'] += 1
+                            has_flop = True
+                        if not has_turn and self._truthy_cell(turn):
+                            stats['by_street']['to_turn'] += 1
+                            has_turn = True
+                        if not has_river and self._truthy_cell(river):
+                            stats['by_street']['to_river'] += 1
+                            has_river = True
                         
                         self._parse_actions(preflop, stats['street_actions']['preflop'], stats)
                         if flop:
@@ -116,7 +140,8 @@ class HandHistoryAnalyzer:
                         
                         # Duration
                         try:
-                            duration = float(row.get('Total Seconds', 0))
+                            # Some dumps use 'Total Seconds' or 'TotalSeconds'
+                            duration = float((row.get('Total Seconds') or row.get('TotalSeconds') or 0))
                             if duration > 0:
                                 stats['avg_hand_duration'].append(duration)
                         except:
@@ -162,7 +187,7 @@ class HandHistoryAnalyzer:
             else:
                 i += 1
     
-    def analyze_lbr_data(self) -> Dict:
+    def analyze_lbr_data(self, max_files: int = 20, analyze_all: bool = False) -> Dict:
         """Analyze LBR match logs for action patterns."""
         print("Analyzing LBR data...")
         
@@ -182,7 +207,10 @@ class HandHistoryAnalyzer:
         
         # Sample a subset for analysis (too many files)
         import random
-        sample_files = random.sample(lbr_files, min(10, len(lbr_files)))
+        if analyze_all:
+            sample_files = lbr_files
+        else:
+            sample_files = random.sample(lbr_files, min(max_files, len(lbr_files)))
         
         for lbr_file in sample_files:
             try:
@@ -294,7 +322,7 @@ class HandHistoryAnalyzer:
         
         return insights
     
-    def run_full_analysis(self) -> Dict:
+    def run_full_analysis(self, max_lbr_files: int = 20, analyze_all_lbr: bool = False) -> Dict:
         """Run complete analysis and return results."""
         print("="*70)
         print("DeepStack Hand History Analysis")
@@ -304,7 +332,7 @@ class HandHistoryAnalyzer:
         aivat_stats = self.analyze_aivat_data()
         print(f"\nAIVAT Analysis: {aivat_stats['total_hands']} hands analyzed")
         
-        lbr_stats = self.analyze_lbr_data()
+        lbr_stats = self.analyze_lbr_data(max_files=max_lbr_files, analyze_all=analyze_all_lbr)
         print(f"LBR Analysis: {lbr_stats['total_hands']} hands analyzed")
         print()
         
@@ -319,19 +347,21 @@ class HandHistoryAnalyzer:
 
 def main():
     """Main analysis function."""
-    data_dir = os.path.join(
-        os.path.dirname(__file__), 
-        '..', 
-        'data', 
-        'official_deepstack_handhistory'
-    )
-    
+    import argparse
+    parser = argparse.ArgumentParser(description='Analyze DeepStack hand history data')
+    parser.add_argument('--data-dir', type=str, default=os.path.join(os.path.dirname(__file__), '..', 'data', 'official_deepstack_handhistory'))
+    parser.add_argument('--export-config', action='store_true', help='Export derived parameters to config/data_generation/parameters')
+    parser.add_argument('--max-lbr-files', type=int, default=20, help='Max LBR logs to sample (ignored if --analyze-all-lbr)')
+    parser.add_argument('--analyze-all-lbr', action='store_true', help='Analyze all LBR logs instead of a sample')
+    args = parser.parse_args()
+
+    data_dir = args.data_dir
     if not os.path.exists(data_dir):
         print(f"Error: Data directory not found: {data_dir}")
         return
     
     analyzer = HandHistoryAnalyzer(data_dir)
-    results = analyzer.run_full_analysis()
+    results = analyzer.run_full_analysis(max_lbr_files=args.max_lbr_files, analyze_all_lbr=args.analyze_all_lbr)
     
     # Print insights
     print("="*70)
@@ -379,6 +409,32 @@ def main():
         json.dump(results, f, indent=2, default=str)
     
     print(f"Full analysis saved to: {output_file}")
+
+    # Optionally export derived parameters for data generation
+    if args.export_config:
+        from datetime import datetime
+        export_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'config', 'data_generation', 'parameters'))
+        os.makedirs(export_dir, exist_ok=True)
+        ts = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
+        export_path = os.path.join(export_dir, f'analytics_{ts}.json')
+
+        insights = results.get('insights', {})
+        street_dist = insights.get('street_distribution', {})
+        cfr = insights.get('recommended_cfr_iterations', {})
+        payload = {
+            'name': f'analytics_{ts}',
+            'source': 'official_deepstack_handhistory',
+            'preflop_weight': float(street_dist.get('preflop', 0.25)) if street_dist else 0.25,
+            'flop_weight': float(street_dist.get('flop', 0.35)) if street_dist else 0.35,
+            'turn_weight': float(street_dist.get('turn', 0.20)) if street_dist else 0.20,
+            'river_weight': float(street_dist.get('river', 0.20)) if street_dist else 0.20,
+            'cfr_iterations': int(cfr.get('recommended', 2000)) if cfr else 2000,
+            'bet_sizing_recommendation': insights.get('bet_sizing_abstraction', []),
+            'notes': 'Derived from analyzed official hand history data'
+        }
+        with open(export_path, 'w') as f:
+            json.dump(payload, f, indent=2)
+        print(f"Derived config exported to: {export_path}")
     print()
     print("="*70)
     print("Analysis Complete")
