@@ -27,8 +27,8 @@
 | 1 | Clone repository | 10s | No |
 | 2 | Install dependencies | 2-3m | No |
 | 3 | Check GPU & system | 5s | No |
-| 4 | Generate training data | 15-20m | No |
-| 5 | Train model | 30-40m | No |
+| 4 | Generate training data | 1.5-2h | No |
+| 5 | Train model | 1-1.5h | No |
 | 6 | Validate results | 1-2m | No |
 | 8 | Generate reports | 2-3m | Yes* |
 | 10 | Interactive viz | 1m | Yes* |
@@ -45,7 +45,7 @@
 ## ⏱️ Total Time Estimates
 
 - **Quick Test** (100 samples): ~30 minutes
-- **Standard Training** (1K samples): ~1-2 hours
+- **Medium Training (DEFAULT)** (5K samples): ~3-4 hours
 - **Production** (50K samples): ~10-12 hours
 
 ## 🎯 Expected Results
@@ -74,6 +74,17 @@
 **Cell 5:**
 ```python
 !python scripts/train_deepstack.py --config scripts/config/championship.json --use-gpu --epochs 50
+```
+
+### Medium Training (DEFAULT - balanced quality and time)
+**Cell 4:**
+```python
+!python scripts/generate_quick_data.py --samples 5000 --cfr-iters 2000
+```
+
+**Cell 5:**
+```python
+!python scripts/train_deepstack.py --config scripts/config/championship.json --use-gpu --epochs 150
 ```
 
 ### Production Training (slower, best accuracy)
