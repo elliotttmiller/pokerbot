@@ -1,5 +1,6 @@
 # Core dependencies
-numpy
+# Note: Versions pinned for Google Colab compatibility
+numpy>=1.26.4,<2.0.0  # Colab-compatible range, avoids binary incompatibility
 pillow
 
 # Machine Learning
@@ -31,7 +32,7 @@ httpx
 certifi
 
 # Data analysis/visualization
-pandas
+pandas>=2.2.2,<2.3.0  # Colab requires 2.2.2
 matplotlib
 seaborn
 plotly

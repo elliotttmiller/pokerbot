@@ -30,16 +30,22 @@ This document summarizes the comprehensive optimization and enhancement of the `
 ### 3. Dependency Installation with Verification (Cell 2)
 **Before:** Simple pip install command
 **After:**
+- Colab-aware dependency handling with pre-uninstall of numpy/pandas
+- Version constraints to prevent binary incompatibility (numpy>=1.26.4,<2.0.0, pandas>=2.2.2,<2.3.0)
 - Progress tracking during installation
 - Timeout handling (5 minutes)
 - Error capture and reporting
+- Runtime restart recommendation for clean package loading
 - Verification of critical packages (torch, numpy, pandas, matplotlib)
 - Clear status indicators
 
 **Benefits:**
+- Prevents binary incompatibility errors common in Colab
+- Compatible with Colab's pre-installed package requirements
 - Early detection of installation issues
 - Better error messages
 - Confidence that all required packages are available
+- Guidance for runtime restart when needed
 
 ### 4. GPU Verification and System Resources (Cell 3 - NEW)
 **Added comprehensive system check:**
