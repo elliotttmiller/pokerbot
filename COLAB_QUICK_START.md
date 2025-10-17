@@ -20,6 +20,8 @@
 
 ## 📊 What Each Cell Does
 
+**Code Cells (execute these):**
+
 | Cell | What It Does | Time | Can Skip? |
 |------|-------------|------|-----------|
 | 1 | Clone repository | 10s | No |
@@ -28,12 +30,15 @@
 | 4 | Generate training data | 15-20m | No |
 | 5 | Train model | 30-40m | No |
 | 6 | Validate results | 1-2m | No |
-| 7 | (Markdown) | - | - |
 | 8 | Generate reports | 2-3m | Yes* |
-| 9 | (Markdown) | - | - |
 | 10 | Interactive viz | 1m | Yes* |
 | 11 | Download model | 30s | Yes* |
-| 12 | (Markdown) | - | - |
+
+**Documentation Cells (markdown - read these):**
+- Cell 0: Introduction and setup
+- Cell 7: Results analysis guide
+- Cell 9: Advanced features
+- Cell 12: Troubleshooting guide
 
 *Optional but recommended
 
@@ -155,7 +160,7 @@ The notebook is designed to be safely re-run:
 
 ## 🆘 Getting Help
 
-1. **Check Cell 12** for troubleshooting guide
+1. **Check the troubleshooting guide** (last markdown cell in notebook)
 2. **Review error messages** in failed cells
 3. **Check documentation** in repository
 4. **Open an issue** on GitHub if stuck
@@ -173,7 +178,13 @@ The notebook is designed to be safely re-run:
 ### Custom Training Config
 Edit Cell 5 to use different config:
 ```python
-!python scripts/train_deepstack.py --config scripts/config/intermediate.json --use-gpu
+# Use a different pre-configured training setup
+!python scripts/train_deepstack.py --config scripts/config/training.json --use-gpu
+
+# Available configs:
+# - championship.json (default, best for production)
+# - training.json (alternative balanced config)
+# - smoketest.json (quick test, minimal training)
 ```
 
 ### Adaptive Bucket Weighting
