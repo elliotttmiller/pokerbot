@@ -111,8 +111,10 @@ class ImprovedDataGenerator:
         Returns:
             Dict with keys: board, pot_state, player_range, opponent_range
         """
-        # Always sample random board for Texas Hold'em (preflop, flop, turn, river)
-        num_board_cards = np.random.choice([0, 3, 4, 5], p=[0.3, 0.4, 0.2, 0.1])
+        # Bias sampling towards later streets for better coverage
+        # DeepStack paper emphasizes training on all streets
+        # Distribution: 20% preflop, 35% flop, 25% turn, 20% river
+        num_board_cards = np.random.choice([0, 3, 4, 5], p=[0.20, 0.35, 0.25, 0.20])
         board = list(np.random.choice(52, num_board_cards, replace=False))
         
         # Sample random pot state
@@ -127,12 +129,13 @@ class ImprovedDataGenerator:
                 'current_player': np.random.choice([1, 2])
             }
         else:
-            # Postflop: larger pots
+            # Postflop: larger pots with more variance
             pot_base = 50 * (len(board) + 1)
+            pot_variance = pot_base * 2
             pot_state = {
                 'street': street,
-                'bets': [np.random.randint(pot_base, pot_base*3), 
-                        np.random.randint(pot_base, pot_base*3)],
+                'bets': [np.random.randint(pot_base, pot_base + pot_variance), 
+                        np.random.randint(pot_base, pot_base + pot_variance)],
                 'current_player': np.random.choice([1, 2])
             }
         
@@ -198,12 +201,13 @@ class ImprovedDataGenerator:
         try:
             tree_root = self.tree_builder.build_tree(tree_params)
             
-            # Set up CFR solver
+            # Set up CFR solver with proper warmup (skip first 400 iterations for averaging)
             from deepstack.core.tree_cfr import TreeCFR
             from deepstack.core.terminal_equity import TerminalEquity
             # Initialize CFR with terminal equity (holdem, 169 buckets)
             te = TerminalEquity(game_variant='holdem', num_hands=self.num_hands)
-            cfr_solver = TreeCFR(skip_iterations=min(200, self.cfr_iterations//5), use_linear_cfr=True, use_cfr_plus=True, terminal_equity=te)
+            skip_iters = max(200, self.cfr_iterations // 5)  # Skip first 20% for strategy averaging
+            cfr_solver = TreeCFR(skip_iterations=skip_iters, use_linear_cfr=True, use_cfr_plus=True, terminal_equity=te)
             
             # Prepare starting ranges
             starting_ranges = np.array([
@@ -340,18 +344,18 @@ class ImprovedDataGenerator:
 def generate_training_data(train_count: int = 10000,
                           valid_count: int = 1000,
                           output_path: str = r'C:/Users/AMD/pokerbot/src/train_samples',
-                          cfr_iterations: int = 1000,
+                          cfr_iterations: int = 2000,
                           bucket_sampling_weights: Optional[np.ndarray] = None) -> None:
     """
     Main function to generate improved training data (Texas Hold'em only).
     
-    Per DeepStack paper: Generate 10M+ training examples for Texas Hold'em. Each solved with 1000+ CFR iterations.
+    Per DeepStack paper: Generate 10M+ training examples for Texas Hold'em. Each solved with 2000+ CFR iterations.
     
     Args:
         train_count: Number of training examples
         valid_count: Number of validation examples  
         output_path: Path to save data
-        cfr_iterations: CFR iterations per sample
+        cfr_iterations: CFR iterations per sample (paper recommends 2000+)
     """
     num_hands = 169
 
@@ -443,7 +447,7 @@ if __name__ == '__main__':
     parser = _argparse.ArgumentParser(description='Generate DeepStack training data')
     parser.add_argument('--train-count', type=int, default=1000)
     parser.add_argument('--valid-count', type=int, default=512)
-    parser.add_argument('--cfr-iterations', type=int, default=1000)
+    parser.add_argument('--cfr-iterations', type=int, default=2000)
     parser.add_argument('--output-path', type=str, default=r'C:/Users/AMD/pokerbot/src/train_samples')
     parser.add_argument('--bucket-weights-path', type=str, default='', help='Path to JSON file with 169 floats for bucket sampling weights')
     args = parser.parse_args()
