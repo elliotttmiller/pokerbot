@@ -1,0 +1,17 @@
+{
+  "description": "Production-quality data generation configuration",
+  "samples": 100000,
+  "validation_samples": 20000,
+  "cfr_iterations": 2500,
+  "output": "src/train_samples_production",
+  "championship_bet_sizing": true,
+  "adaptive_cfr": false,
+  "comments": {
+    "samples": "100K samples for production quality (correlation 0.75-0.85)",
+    "cfr_iterations": "2500 iterations for high-quality solutions",
+    "championship_bet_sizing": "Per-street bet abstractions enabled",
+    "estimated_time": "18-24 hours on modern CPU",
+    "expected_correlation": "0.75-0.85",
+    "expected_quality": "Production"
+  }
+}
