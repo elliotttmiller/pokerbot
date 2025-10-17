@@ -134,6 +134,10 @@ data/unified_training_data.json
 *.pkl
 *.pickle
 
+# Training data files (generated locally)
+src/train_samples/*.pt
+src/train_samples/*.json
+
 # Keep pre-trained models from champion projects
 # models/pretrained deprecated; all models now under models/versions
 !data/equity_tables/*.json
