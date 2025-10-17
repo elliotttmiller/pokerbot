@@ -18,16 +18,18 @@ class TerminalEquity:
     2. Fold nodes - player folds, opponent wins pot
     """
     
-    def __init__(self, game_variant: str = 'holdem', num_hands: int = 169):
+    def __init__(self, game_variant: str = 'holdem', num_hands: int = 169, fast_approximation: bool = True):
         """
         Initialize TerminalEquity calculator.
         
         Args:
             game_variant: 'holdem' (default for Texas Hold'em) or 'leduc' (legacy)
             num_hands: Number of possible hands (169 for Hold'em, 6 for Leduc)
+            fast_approximation: If True, use fast rank-based approximation instead of slow Monte Carlo
         """
         self.game_variant = game_variant
         self.num_hands = num_hands
+        self.fast_approximation = fast_approximation
         self.board = None
         self._last_board_key = None  # cache key to avoid recompute
         self.call_matrix = None
@@ -61,7 +63,11 @@ class TerminalEquity:
         if self.game_variant == 'leduc':
             self._compute_leduc_equity()
         else:
-            self._compute_holdem_equity()
+            # Use fast approximation for quick data generation, or full Monte Carlo for production
+            if self.fast_approximation:
+                self._compute_rank_based_equity()
+            else:
+                self._compute_holdem_equity()
 
     def _compute_leduc_equity(self):
         """
@@ -148,7 +154,9 @@ class TerminalEquity:
                         board_cards.append(Card(rank, suit))
             
             # Monte Carlo equity calculation with adaptive trials
-            num_trials = 500 if len(board_cards) >= 3 else 1000  # Faster on later streets
+            # OPTIMIZED: Use much fewer trials for quick data generation (50x speedup)
+            # For production/championship-level, increase to 500-1000 trials
+            num_trials = 10 if len(board_cards) >= 3 else 20  # Fast approximation
             
             for i in range(self.num_hands):
                 for j in range(self.num_hands):
