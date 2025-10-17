@@ -13,9 +13,20 @@ Usage:
   python scripts/generate_quick_data.py --samples 50000 --cfr-iters 2500
 """
 
+
 import sys
 import os
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
+from dotenv import load_dotenv
+load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), '..', '.env'))
+pythonpath = os.environ.get("PYTHONPATH")
+if pythonpath:
+    for p in pythonpath.split(os.pathsep):
+        if p and p not in sys.path:
+            sys.path.insert(0, p)
+# Fallback: always add src path directly
+src_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'src'))
+if src_path not in sys.path:
+    sys.path.insert(0, src_path)
 
 import argparse
 from deepstack.data.data_generation import generate_training_data

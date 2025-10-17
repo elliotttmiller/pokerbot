@@ -12,6 +12,7 @@ Usage:
     python scripts/train_deepstack.py --use-gpu --verbose
 """
 
+
 import argparse
 import json
 import os
@@ -19,9 +20,7 @@ import sys
 from pathlib import Path
 import math
 import random
-
 import numpy as np
-
 from dotenv import load_dotenv
 load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), '..', '.env'))
 pythonpath = os.environ.get("PYTHONPATH")

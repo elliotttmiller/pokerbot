@@ -7,6 +7,7 @@ Usage examples:
     - Full/production:  python fixed_train.py --mode full --episodes 10000
 """
 
+
 import os
 import sys
 import argparse
@@ -17,20 +18,16 @@ import numpy as np
 from datetime import datetime
 from collections import defaultdict
 from dotenv import load_dotenv
-
-# Load .env for PYTHONPATH and other env vars
 load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), '..', '.env'))
 pythonpath = os.environ.get("PYTHONPATH")
-if pythonpath and pythonpath not in sys.path:
-    sys.path.insert(0, pythonpath)
-project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
-src_path = os.path.join(project_root, 'src')
+if pythonpath:
+    for p in pythonpath.split(os.pathsep):
+        if p and p not in sys.path:
+            sys.path.insert(0, p)
+# Fallback: always add src path directly
+src_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'src'))
 if src_path not in sys.path:
     sys.path.insert(0, src_path)
-
-print(f"[DEBUG] PYTHONPATH from .env: {pythonpath}")
-print(f"[DEBUG] src_path resolved: {src_path}")
-print(f"[DEBUG] sys.path: {sys.path}")
 
 from src.utils import Logger
 from src.agents import create_agent, PokerBotAgent

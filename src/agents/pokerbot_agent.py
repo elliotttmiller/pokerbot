@@ -40,6 +40,21 @@ from .base_agent import BaseAgent
 
 
 class PokerBotAgent(BaseAgent):
+
+    def load(self, path: str):
+        """Load full agent state from a unified .pt file (PyTorch checkpoint)."""
+        if not TORCH_AVAILABLE:
+            raise ImportError("PyTorch is required to load .pt model files.")
+        import torch
+        checkpoint = torch.load(path, map_location='cpu')
+        # Restore agent attributes (robust to missing keys)
+        for k, v in checkpoint.items():
+            if hasattr(self, k):
+                try:
+                    setattr(self, k, v)
+                except Exception:
+                    pass
+        print(f"[PokerBot] Loaded agent state from {path}")
     """
     Unified world-class poker agent combining multiple AI techniques.
     

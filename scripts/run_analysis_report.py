@@ -1,26 +1,81 @@
+
 """
 Automated advanced analysis and reporting for DeepStack agent training.
 Generates metrics, loss curves, and strategy visualizations, and exports results to /models/reports.
 """
 import os
+import sys
 import numpy as np
 import matplotlib.pyplot as plt
+import torch
+import torch.nn as nn
+import torch.optim as optim
+from dotenv import load_dotenv
+load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), '..', '.env'))
+pythonpath = os.environ.get("PYTHONPATH")
+if pythonpath:
+    for p in pythonpath.split(os.pathsep):
+        if p and p not in sys.path:
+            sys.path.insert(0, p)
+# Fallback: always add src path directly
+src_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'src'))
+if src_path not in sys.path:
+    sys.path.insert(0, src_path)
 from src.agents.cfr_agent import CFRAgent
 
-def run_analysis_report(samples_dir='data/train_samples', report_dir='models/reports'):
+def run_analysis_report(samples_dir='src/train_samples', report_dir='models/reports'):
     os.makedirs(report_dir, exist_ok=True)
-    samples = load_deepstack_train_samples(samples_dir)
-    import tensorflow as tf
-    model = tf.keras.models.Sequential([
-        tf.keras.layers.Input(shape=(27,)),
-        tf.keras.layers.Dense(64, activation='relu'),
-        tf.keras.layers.Dense(13)
-    ])
-    history = train_value_network_on_deepstack_samples(model, samples, epochs=10, batch_size=32)
+    # Load .pt files using torch
+    X = torch.load(os.path.join(samples_dir, 'train_inputs.pt'))
+    y = torch.load(os.path.join(samples_dir, 'train_targets.pt'))
+    X = X.float().numpy()
+    y = y.float().numpy()
+    # Train/val split
+    n = X.shape[0]
+    split = max(1, int(n * 0.8))
+    perm = np.random.permutation(n)
+    train_idx, val_idx = perm[:split], perm[split:]
+    X_train, y_train = X[train_idx], y[train_idx]
+    X_val, y_val = X[val_idx], y[val_idx]
+    # Simple PyTorch MLP
+    class MLP(nn.Module):
+        def __init__(self, in_dim, out_dim):
+            super().__init__()
+            self.net = nn.Sequential(
+                nn.Linear(in_dim, 64),
+                nn.ReLU(),
+                nn.Linear(64, out_dim)
+            )
+        def forward(self, x):
+            return self.net(x)
+    model = MLP(X.shape[1], y.shape[1] if y.ndim > 1 else 1)
+    optimizer = optim.Adam(model.parameters(), lr=1e-3)
+    loss_fn = nn.MSELoss()
+    train_losses, val_losses = [], []
+    epochs = 10
+    for epoch in range(epochs):
+        model.train()
+        optimizer.zero_grad()
+        x_t = torch.tensor(X_train, dtype=torch.float32)
+        y_t = torch.tensor(y_train, dtype=torch.float32)
+        pred = model(x_t)
+        loss = loss_fn(pred, y_t)
+        loss.backward()
+        optimizer.step()
+        train_losses.append(loss.item())
+        # Validation
+        model.eval()
+        with torch.no_grad():
+            x_v = torch.tensor(X_val, dtype=torch.float32)
+            y_v = torch.tensor(y_val, dtype=torch.float32)
+            val_pred = model(x_v)
+            val_loss = loss_fn(val_pred, y_v)
+            val_losses.append(val_loss.item())
+        print(f"Epoch {epoch+1}/{epochs} - Train Loss: {loss.item():.4f} - Val Loss: {val_loss.item():.4f}")
     # Plot loss curves
     plt.figure()
-    plt.plot(history.history['loss'], label='Train Loss')
-    plt.plot(history.history['val_loss'], label='Val Loss')
+    plt.plot(train_losses, label='Train Loss')
+    plt.plot(val_losses, label='Val Loss')
     plt.xlabel('Epoch')
     plt.ylabel('Loss')
     plt.title('Value Network Training Loss')
@@ -44,8 +99,8 @@ def run_analysis_report(samples_dir='data/train_samples', report_dir='models/rep
     plt.close()
     # Export metrics
     metrics = {
-        'final_train_loss': float(history.history['loss'][-1]),
-        'final_val_loss': float(history.history['val_loss'][-1]),
+        'final_train_loss': float(train_losses[-1]),
+        'final_val_loss': float(val_losses[-1]),
         'avg_strategy': avg_strategy.tolist()
     }
     with open(os.path.join(report_dir, 'metrics.json'), 'w') as f:
