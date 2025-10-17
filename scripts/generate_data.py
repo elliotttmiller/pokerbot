@@ -193,6 +193,8 @@ Examples:
                        help='Save configuration to output directory')
     parser.add_argument('--use-latest-analytics', action='store_true',
                        help='Load latest parameters from config/data_generation/parameters (handhistory analytics or auto-tune) and apply street weights and bet sizing overrides')
+    parser.add_argument('--smoothing-alpha', type=float,
+                       help='Blend factor [0..1] to smooth degenerate street distributions when applying street weights (default 0.15)')
     
     args = parser.parse_args()
     
@@ -315,6 +317,7 @@ Examples:
     # Optionally load latest analytics/optimized parameters
     street_sampling_weights = None
     bet_sizing_override = None
+    smoothing_alpha = args.smoothing_alpha
     if args.use_latest_analytics:
         try:
             from glob import glob
@@ -343,6 +346,12 @@ Examples:
                     bet_sizing_override = cfg2['bet_sizing']
                 elif 'bet_sizing_recommendation' in cfg2:
                     bet_sizing_override = cfg2['bet_sizing_recommendation']
+                # Smoothing alpha (optional in configs)
+                if smoothing_alpha is None and 'smoothing_alpha' in cfg2:
+                    try:
+                        smoothing_alpha = float(cfg2['smoothing_alpha'])
+                    except Exception:
+                        pass
                 # Pretty print summary
                 print("[INFO] Using latest analytics/optimized parameters:")
                 print(f"       source: {latest}")
@@ -351,6 +360,8 @@ Examples:
                 if bet_sizing_override is not None:
                     keys = list(bet_sizing_override.keys())
                     print(f"       bet sizing override: streets {keys}")
+                if smoothing_alpha is not None:
+                    print(f"       smoothing_alpha: {smoothing_alpha}")
                 print()
             else:
                 print("[INFO] No analytics/optimized parameters found under config/data_generation/parameters")
@@ -368,7 +379,8 @@ Examples:
             use_championship_bet_sizing=config.get('championship_bet_sizing', True),
             use_adaptive_cfr=config.get('adaptive_cfr', False),
             street_sampling_weights=street_sampling_weights,
-            bet_sizing_override=bet_sizing_override
+            bet_sizing_override=bet_sizing_override,
+            smoothing_alpha=(0.15 if smoothing_alpha is None else float(smoothing_alpha))
         )
     except KeyboardInterrupt:
         print()

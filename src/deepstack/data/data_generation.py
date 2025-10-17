@@ -98,7 +98,8 @@ class ImprovedDataGenerator:
                  use_per_street_bet_sizing: bool = True,
                  use_adaptive_cfr: bool = False,
                  street_sampling_weights: Optional[object] = None,
-                 bet_sizing_override: Optional[dict] = None):
+                 bet_sizing_override: Optional[dict] = None,
+                 smoothing_alpha: float = 0.15):
         """
         Initialize data generator.
 
@@ -109,12 +110,16 @@ class ImprovedDataGenerator:
             bucket_sampling_weights: Optional weights for biased bucket sampling
             use_per_street_bet_sizing: Use street-specific bet abstractions (championship-level)
             use_adaptive_cfr: Adjust CFR iterations based on situation complexity
+            street_sampling_weights: Optional distribution over [preflop, flop, turn, river]
+            bet_sizing_override: Optional per-street bet sizing dictionary
+            smoothing_alpha: Blend factor [0..1] to smooth degenerate street distributions (default 0.15)
         """
         self.num_hands = num_hands
         self.cfr_iterations = cfr_iterations
         self.verbose = verbose
         self.use_per_street_bet_sizing = use_per_street_bet_sizing
         self.use_adaptive_cfr = use_adaptive_cfr
+        self.smoothing_alpha = float(smoothing_alpha)
         # Normalize street sampling weights -> probabilities over [preflop, flop, turn, river]
         def _normalize_street_weights(weights_obj: Optional[object]) -> np.ndarray:
             # Accept dict with keys ('preflop','flop','turn','river') or 0..3, or list/tuple of 4 numbers
@@ -152,7 +157,7 @@ class ImprovedDataGenerator:
                 # Guardrails: avoid degenerate distributions (e.g., 100% preflop) by blending with default
                 # If postflop mass is too small (<5%) or any zero probability, blend 15% with default and renormalize
                 if arr[1:].sum() < 0.05 or np.any(arr <= 1e-9):
-                    alpha = 0.15
+                    alpha = float(self.smoothing_alpha)
                     arr = (1.0 - alpha) * arr + alpha * default
                     arr = (arr / arr.sum()).astype(np.float64)
                 return arr
@@ -617,7 +622,8 @@ def generate_training_data(train_count: int = 10000,
                           use_championship_bet_sizing: bool = True,
                           use_adaptive_cfr: bool = False,
                           street_sampling_weights: Optional[object] = None,
-                          bet_sizing_override: Optional[dict] = None) -> None:
+                          bet_sizing_override: Optional[dict] = None,
+                          smoothing_alpha: float = 0.15) -> None:
     """
     Main function to generate improved training data (Texas Hold'em only).
     """
@@ -630,7 +636,8 @@ def generate_training_data(train_count: int = 10000,
         use_per_street_bet_sizing=use_championship_bet_sizing,
         use_adaptive_cfr=use_adaptive_cfr,
         street_sampling_weights=street_sampling_weights,
-        bet_sizing_override=bet_sizing_override
+        bet_sizing_override=bet_sizing_override,
+        smoothing_alpha=smoothing_alpha
     )
     print("="*70)
     print("IMPROVED DATA GENERATION - DeepStack Paper Methodology")
@@ -739,6 +746,7 @@ if __name__ == '__main__':
     parser.add_argument('--cfr-iterations', type=int, default=2000)
     parser.add_argument('--output-path', type=str, default=r'C:/Users/AMD/pokerbot/src/train_samples')
     parser.add_argument('--bucket-weights-path', type=str, default='', help='Path to JSON file with 169 floats for bucket sampling weights')
+    parser.add_argument('--smoothing-alpha', type=float, default=0.15, help='Blend factor to smooth degenerate street distributions [0..1]')
     parser.add_argument('--no-mp', action='store_true', help='Disable multiprocessing for generation')
     parser.add_argument('--profile', action='store_true', help='Enable cProfile in sequential generation')
     parser.add_argument('--config', nargs='?', const='latest', default=None,
@@ -752,6 +760,12 @@ if __name__ == '__main__':
         args.train_count = args.train_count if args.train_count != parser.get_default('train-count') else int(cfg.get('samples', args.train_count))
         args.valid_count = args.valid_count if args.valid_count != parser.get_default('valid-count') else int(cfg.get('valid_samples', args.valid_count))
         args.cfr_iterations = args.cfr_iterations if args.cfr_iterations != parser.get_default('cfr-iterations') else int(cfg.get('cfr_iterations', args.cfr_iterations))
+        # smoothing alpha from config
+        if 'smoothing_alpha' in cfg and args.smoothing_alpha == parser.get_default('smoothing-alpha'):
+            try:
+                args.smoothing_alpha = float(cfg['smoothing_alpha'])
+            except Exception:
+                pass
         # Optional: allow config to specify output
         if 'output_path' in cfg and args.output_path == parser.get_default('output-path'):
             args.output_path = str(cfg['output_path'])
@@ -797,6 +811,7 @@ if __name__ == '__main__':
         use_adaptive_cfr=False,
         street_sampling_weights=locals().get('street_weights', None),
         bet_sizing_override=locals().get('bet_override', None),
+        smoothing_alpha=float(getattr(args, 'smoothing_alpha', 0.15))
     )
     # Generate and save using the helper for consistency
     valid_inputs, valid_targets, valid_masks, valid_streets = gen.generate_dataset(args.valid_count, args.output_path, 'valid', use_multiprocessing=not args.no_mp, profile=args.profile)

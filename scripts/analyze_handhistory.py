@@ -40,6 +40,96 @@ class HandHistoryAnalyzer:
         
         self.aivat_results = []
         self.lbr_results = []
+        # Accumulators for experimental pot-relative ratios per street (0=pre,1=flop,2=turn,3=river)
+        self._pot_rel_raises = {0: [], 1: [], 2: [], 3: []}
+
+    @staticmethod
+    def _parse_tokens(action_str: str) -> List[Tuple[str, Optional[float]]]:
+        """Parse compact action string like 'cr300c' into tokens [('c',None), ('r',300.0), ('c',None)]."""
+        tokens: List[Tuple[str, Optional[float]]] = []
+        if not action_str:
+            return tokens
+        s = action_str.strip().lower().replace(' ', '')
+        i = 0
+        while i < len(s):
+            ch = s[i]
+            if ch in ('c', 'f'):
+                tokens.append((ch, None))
+                i += 1
+            elif ch == 'r':
+                j = i + 1
+                while j < len(s) and (s[j].isdigit() or s[j] == '.'):
+                    j += 1
+                amt = None
+                if j > i + 1:
+                    try:
+                        amt = float(s[i+1:j])
+                    except:
+                        amt = None
+                tokens.append(('r', amt))
+                i = j
+            elif ch.isdigit():
+                # Some logs prefix street with actor index (e.g., '0r200c') - skip leading digits
+                while i < len(s) and s[i].isdigit():
+                    i += 1
+            else:
+                i += 1
+        return tokens
+
+    @staticmethod
+    def _compute_pot_relative_from_streets(preflop: str, flop: str, turn: str, river: str,
+                                           sb: int = 50, bb: int = 100) -> Dict[int, List[float]]:
+        """
+        Experimental reconstruction of pot-relative raise ratios per street.
+        Assumptions: heads-up, blinds sb/bb, 'rX' means raise to X chips on that street.
+        Returns mapping street_index -> list of ratios (bet_increment / pot_before_bet).
+        """
+        ratios = {0: [], 1: [], 2: [], 3: []}
+        # Helper to process a street
+        def process_street(tokens: List[Tuple[str, Optional[float]]], street_idx: int,
+                           pot: float, contrib: List[float]) -> Tuple[float, List[float]]:
+            current_bet = max(contrib) if contrib else 0.0
+            actor = 0  # actor index toggle; exact identity doesn't matter for ratios
+            for kind, amt in tokens:
+                if kind == 'r' and amt is not None:
+                    pot_before = pot if pot > 0 else 1.0  # avoid div by zero
+                    to_put = max(0.0, amt - contrib[actor])
+                    ratio = to_put / pot_before
+                    if 0.0 < ratio < 5.0:  # discard pathological values
+                        ratios[street_idx].append(ratio)
+                    contrib[actor] += to_put
+                    current_bet = max(current_bet, contrib[actor])
+                    pot += to_put
+                    actor = 1 - actor
+                elif kind == 'c':
+                    to_put = max(0.0, current_bet - contrib[actor])
+                    contrib[actor] += to_put
+                    pot += to_put
+                    actor = 1 - actor
+                elif kind == 'f':
+                    break
+            return pot, contrib
+
+        # Initialize preflop with blinds
+        pot = float(sb + bb)
+        contrib = [float(sb), float(bb)]
+        # Preflop
+        pre_tokens = HandHistoryAnalyzer._parse_tokens(preflop)
+        pot, contrib = process_street(pre_tokens, 0, pot, contrib)
+        # Street transition -> carry pot, reset contributions
+        contrib = [0.0, 0.0]
+        # Flop
+        flop_tokens = HandHistoryAnalyzer._parse_tokens(flop)
+        pot, contrib = process_street(flop_tokens, 1, pot, contrib)
+        contrib = [0.0, 0.0]
+        # Turn
+        turn_tokens = HandHistoryAnalyzer._parse_tokens(turn)
+        pot, contrib = process_street(turn_tokens, 2, pot, contrib)
+        contrib = [0.0, 0.0]
+        # River
+        river_tokens = HandHistoryAnalyzer._parse_tokens(river)
+        pot, contrib = process_street(river_tokens, 3, pot, contrib)
+        return ratios
         
     @staticmethod
     def _truthy_cell(val: Optional[str]) -> bool:
@@ -81,72 +171,86 @@ class HandHistoryAnalyzer:
             
         csv_files = list(self.aivat_dir.glob('results.*.csv'))
         print(f"Found {len(csv_files)} AIVAT CSV files")
-        
+
         for csv_file in csv_files:
             try:
-                with open(csv_file, 'r', encoding='utf-8') as f:
-                    reader = csv.DictReader(f)
-                    for row in reader:
-                        stats['total_hands'] += 1
-                        
-                        # Position
-                        pos = row.get('Position', '').strip().lower()
-                        if pos in ['bb', 'sb']:
-                            stats['by_position'][pos] += 1
-                        
-                        # Street progression (robust to header variations and placeholders)
-                        # Some dumps use different header names; also fall back to action strings.
-                        flop_cards = row.get('Flop Cards') or row.get('FlopCards') or row.get('Flop')
-                        turn_card = row.get('Turn Card') or row.get('TurnCard') or row.get('Turn')
-                        river_card = row.get('River Card') or row.get('RiverCard') or row.get('River')
+                # Try multiple encodings for robustness
+                encodings = ['utf-8-sig', 'utf-8', 'latin-1']
+                success = False
+                for enc in encodings:
+                    try:
+                        with open(csv_file, 'r', encoding=enc, newline='') as f:
+                            reader = csv.DictReader(f)
+                            for row in reader:
+                                stats['total_hands'] += 1
 
-                        has_flop = self._truthy_cell(flop_cards)
-                        has_turn = self._truthy_cell(turn_card)
-                        has_river = self._truthy_cell(river_card)
-                        
-                        if has_river:
-                            stats['by_street']['to_river'] += 1
-                        elif has_turn:
-                            stats['by_street']['to_turn'] += 1
-                        elif has_flop:
-                            stats['by_street']['to_flop'] += 1
-                        else:
-                            stats['by_street']['preflop_only'] += 1
-                        
-                        # Parse actions (handle header variants)
-                        preflop = (row.get('Pre-flop') or row.get('Preflop') or '').strip()
-                        flop = (row.get('Flop') or '').strip()
-                        turn = (row.get('Turn') or '').strip()
-                        river = (row.get('River') or '').strip()
+                                # Position
+                                pos = row.get('Position', '')
+                                pos = pos.strip().lower() if isinstance(pos, str) else ''
+                                if pos in ['bb', 'sb']:
+                                    stats['by_position'][pos] += 1
 
-                        # If card headers missing but actions present, treat as street reached
-                        if not has_flop and self._truthy_cell(flop):
-                            stats['by_street']['to_flop'] += 1
-                            has_flop = True
-                        if not has_turn and self._truthy_cell(turn):
-                            stats['by_street']['to_turn'] += 1
-                            has_turn = True
-                        if not has_river and self._truthy_cell(river):
-                            stats['by_street']['to_river'] += 1
-                            has_river = True
-                        
-                        self._parse_actions(preflop, stats['street_actions']['preflop'], stats)
-                        if flop:
-                            self._parse_actions(flop, stats['street_actions']['flop'], stats)
-                        if turn:
-                            self._parse_actions(turn, stats['street_actions']['turn'], stats)
-                        if river:
-                            self._parse_actions(river, stats['street_actions']['river'], stats)
-                        
-                        # Duration
-                        try:
-                            # Some dumps use 'Total Seconds' or 'TotalSeconds'
-                            duration = float((row.get('Total Seconds') or row.get('TotalSeconds') or 0))
-                            if duration > 0:
-                                stats['avg_hand_duration'].append(duration)
-                        except:
-                            pass
-                            
+                                # Card columns (header variants)
+                                flop_cards = row.get('Flop Cards') or row.get('FlopCards') or row.get('Flop')
+                                turn_card = row.get('Turn Card') or row.get('TurnCard') or row.get('Turn')
+                                river_card = row.get('River Card') or row.get('RiverCard') or row.get('River')
+
+                                # Action columns (header variants)
+                                preflop = (row.get('Pre-flop') or row.get('Preflop') or '')
+                                flop = (row.get('Flop') or '')
+                                turn = (row.get('Turn') or '')
+                                river = (row.get('River') or '')
+                                preflop = preflop.strip() if isinstance(preflop, str) else ''
+                                flop = flop.strip() if isinstance(flop, str) else ''
+                                turn = turn.strip() if isinstance(turn, str) else ''
+                                river = river.strip() if isinstance(river, str) else ''
+
+                                # Final reach flags: OR of cards/actions, count ONCE per hand
+                                has_flop = self._truthy_cell(flop_cards) or self._truthy_cell(flop)
+                                has_turn = self._truthy_cell(turn_card) or self._truthy_cell(turn)
+                                has_river = self._truthy_cell(river_card) or self._truthy_cell(river)
+
+                                if has_river:
+                                    stats['by_street']['to_river'] += 1
+                                elif has_turn:
+                                    stats['by_street']['to_turn'] += 1
+                                elif has_flop:
+                                    stats['by_street']['to_flop'] += 1
+                                else:
+                                    stats['by_street']['preflop_only'] += 1
+
+                                # Parse actions for raise sizes and action distribution
+                                self._parse_actions(preflop, stats['street_actions']['preflop'], stats)
+                                if flop:
+                                    self._parse_actions(flop, stats['street_actions']['flop'], stats)
+                                if turn:
+                                    self._parse_actions(turn, stats['street_actions']['turn'], stats)
+                                if river:
+                                    self._parse_actions(river, stats['street_actions']['river'], stats)
+
+                                # Experimental: collect pot-relative ratios per street
+                                try:
+                                    ratios = self._compute_pot_relative_from_streets(preflop, flop, turn, river)
+                                    for si in (0, 1, 2, 3):
+                                        if ratios.get(si):
+                                            self._pot_rel_raises[si].extend(ratios[si])
+                                except Exception:
+                                    pass
+
+                                # Duration
+                                try:
+                                    # Some dumps use 'Total Seconds' or 'TotalSeconds'
+                                    duration = float((row.get('Total Seconds') or row.get('TotalSeconds') or 0))
+                                    if duration > 0:
+                                        stats['avg_hand_duration'].append(duration)
+                                except:
+                                    pass
+                        success = True
+                        break
+                    except Exception:
+                        continue
+                if not success:
+                    raise RuntimeError(f"Failed to parse {csv_file} with known encodings")
             except Exception as e:
                 print(f"Error processing {csv_file}: {e}")
         
@@ -195,7 +299,14 @@ class HandHistoryAnalyzer:
             'total_hands': 0,
             'outcomes': defaultdict(int),
             'avg_pots': [],
-            'hand_patterns': defaultdict(int)
+            'hand_patterns': defaultdict(int),
+            'by_street': {
+                'preflop_only': 0,
+                'to_flop': 0,
+                'to_turn': 0,
+                'to_river': 0
+            },
+            'raise_sizes': []
         }
         
         if not self.lbr_dir.exists():
@@ -224,12 +335,51 @@ class HandHistoryAnalyzer:
                         # Parse hand: "1:BR,Player:0r200c/cr300c/r1493f:KhKc,6h9c|/2s5dTs/2d:600,-600(600.000000)"
                         parts = line.strip().split(':')
                         if len(parts) >= 5:
-                            # Action sequence
+                            # Action sequence and board segment
                             action_seq = parts[2]
+                            board_part = parts[3] if len(parts) > 3 else ''
                             # Outcome
                             outcome_str = parts[4]
+
+                            # Determine street reach using board markers after '|'
+                            board_seg = board_part.split('|', 1)[-1] if '|' in board_part else ''
+                            nonempty = [t for t in board_seg.split('/') if t]
+                            n = len(nonempty)
+                            has_flop = n >= 1
+                            has_turn = n >= 2
+                            has_river = n >= 3
+                            if has_river:
+                                stats['by_street']['to_river'] += 1
+                            elif has_turn:
+                                stats['by_street']['to_turn'] += 1
+                            elif has_flop:
+                                stats['by_street']['to_flop'] += 1
+                            else:
+                                stats['by_street']['preflop_only'] += 1
+
+                            # Raise sizes (absolute amounts)
+                            for m in re.finditer(r'r(\d+(?:\.\d+)?)', action_seq):
+                                try:
+                                    stats['raise_sizes'].append(float(m.group(1)))
+                                except:
+                                    pass
+
+                            # Experimental: per-street pot-relative ratios
                             try:
-                                outcome_match = re.search(r'([-\d]+),([-\d]+)', outcome_str)
+                                streets = action_seq.split('/')
+                                pf = streets[0] if len(streets) > 0 else ''
+                                fl = streets[1] if len(streets) > 1 else ''
+                                tr = streets[2] if len(streets) > 2 else ''
+                                rv = streets[3] if len(streets) > 3 else ''
+                                ratios = self._compute_pot_relative_from_streets(pf, fl, tr, rv)
+                                for si in (0, 1, 2, 3):
+                                    if ratios.get(si):
+                                        self._pot_rel_raises[si].extend(ratios[si])
+                            except Exception:
+                                pass
+
+                            try:
+                                outcome_match = re.search(r'([\-\d]+),([\-\d]+)', outcome_str)
                                 if outcome_match:
                                     p1_chips = int(outcome_match.group(1))
                                     pot = abs(p1_chips)
@@ -259,26 +409,38 @@ class HandHistoryAnalyzer:
             'training_recommendations': []
         }
         
-        # Street distribution insights
-        total = sum(aivat_stats['by_street'].values())
-        if total > 0:
+        # Street distribution insights (blend AIVAT + LBR if available)
+        a_total = sum(aivat_stats['by_street'].values()) if aivat_stats and 'by_street' in aivat_stats else 0
+        l_total = sum(lbr_stats['by_street'].values()) if lbr_stats and 'by_street' in lbr_stats else 0
+        combined = {'preflop_only': 0, 'to_flop': 0, 'to_turn': 0, 'to_river': 0}
+        if a_total:
+            for k in combined:
+                combined[k] += aivat_stats['by_street'].get(k, 0)
+        if l_total:
+            for k in combined:
+                combined[k] += lbr_stats['by_street'].get(k, 0)
+        c_total = sum(combined.values())
+        if c_total > 0:
             insights['street_distribution'] = {
-                'preflop': aivat_stats['by_street']['preflop_only'] / total,
-                'flop': aivat_stats['by_street']['to_flop'] / total,
-                'turn': aivat_stats['by_street']['to_turn'] / total,
-                'river': aivat_stats['by_street']['to_river'] / total
+                'preflop': combined['preflop_only'] / c_total,
+                'flop': combined['to_flop'] / c_total,
+                'turn': combined['to_turn'] / c_total,
+                'river': combined['to_river'] / c_total
             }
-            
-            # Recommendation: emphasize postflop (as in current implementation)
-            postflop_pct = (total - aivat_stats['by_street']['preflop_only']) / total
+            postflop_pct = (c_total - combined['preflop_only']) / c_total
             if postflop_pct > 0.6:
                 insights['training_recommendations'].append(
                     f"Emphasize postflop training: {postflop_pct*100:.1f}% of hands reach flop or beyond"
                 )
         
-        # Bet sizing analysis
-        if aivat_stats['raise_sizes']:
-            raise_sizes = np.array(aivat_stats['raise_sizes'])
+        # Bet sizing analysis (combine raise sizes from AIVAT + LBR; absolute not pot-relative)
+        combined_raises = []
+        if aivat_stats.get('raise_sizes'):
+            combined_raises.extend(aivat_stats['raise_sizes'])
+        if lbr_stats.get('raise_sizes'):
+            combined_raises.extend(lbr_stats['raise_sizes'])
+        if combined_raises:
+            raise_sizes = np.array(combined_raises)
             percentiles = np.percentile(raise_sizes, [25, 50, 75, 90, 95])
             insights['bet_sizing_abstraction'] = [
                 {'percentile': 25, 'size': percentiles[0]},
@@ -287,12 +449,29 @@ class HandHistoryAnalyzer:
                 {'percentile': 90, 'size': percentiles[3]},
                 {'percentile': 95, 'size': percentiles[4]}
             ]
-            
-            # Common bet sizes in real play
-            common_sizes = [0.5, 0.75, 1.0, 1.5, 2.0]  # Pot-relative
+            # Note: prefer pot-relative sizes once pot reconstruction is implemented
             insights['training_recommendations'].append(
-                f"Use bet abstraction with pot-relative sizes: {common_sizes}"
+                "Consider refining bet sizing to pot-relative ratios once pot reconstruction is implemented"
             )
+
+        # Experimental: pot-relative bet sizing per street using reconstructed ratios
+        try:
+            per_street = {}
+            for si in (1, 2, 3):  # postflop only for override
+                arr = np.array(self._pot_rel_raises.get(si, []), dtype=float)
+                arr = arr[np.isfinite(arr)]
+                if arr.size >= 20:
+                    qs = np.percentile(arr, [25, 50, 75, 90])
+                    # Clip to reasonable range and round to 2 decimals
+                    qs = np.clip(qs, 0.1, 2.5)
+                    per_street[si] = [float(round(x, 2)) for x in qs]
+            if per_street:
+                insights['bet_sizing_pot_relative'] = per_street
+                insights['training_recommendations'].append(
+                    'Derived experimental pot-relative bet sizing from reconstructed pot dynamics'
+                )
+        except Exception:
+            pass
         
         # Position importance
         total_pos = sum(aivat_stats['by_position'].values())
@@ -351,6 +530,10 @@ def main():
     parser = argparse.ArgumentParser(description='Analyze DeepStack hand history data')
     parser.add_argument('--data-dir', type=str, default=os.path.join(os.path.dirname(__file__), '..', 'data', 'official_deepstack_handhistory'))
     parser.add_argument('--export-config', action='store_true', help='Export derived parameters to config/data_generation/parameters')
+    parser.add_argument('--cap-streets', action='store_true', help='When exporting, cap street_distribution with minimum per postflop street and renormalize')
+    parser.add_argument('--min-postflop-pct', type=float, default=0.05, help='Minimum proportion for each of flop/turn/river when capping (default 0.05)')
+    parser.add_argument('--smoothing-alpha', type=float, default=None, help='Optional smoothing_alpha to include in exported config')
+    parser.add_argument('--pot-relative-bets', action='store_true', help='Experimental: attempt pot reconstruction to export per-street bet_sizing_override as pot-relative ratios')
     parser.add_argument('--max-lbr-files', type=int, default=20, help='Max LBR logs to sample (ignored if --analyze-all-lbr)')
     parser.add_argument('--analyze-all-lbr', action='store_true', help='Analyze all LBR logs instead of a sample')
     args = parser.parse_args()
@@ -419,7 +602,26 @@ def main():
         export_path = os.path.join(export_dir, f'analytics_{ts}.json')
 
         insights = results.get('insights', {})
-        street_dist = insights.get('street_distribution', {})
+        street_dist = dict(insights.get('street_distribution', {}) or {})
+        # Optionally cap street distribution extremes
+        if args.cap_streets and street_dist:
+            try:
+                pre = float(street_dist.get('preflop', 0.25))
+                flop = float(street_dist.get('flop', 0.35))
+                turn = float(street_dist.get('turn', 0.20))
+                river = float(street_dist.get('river', 0.20))
+                min_pf = 0.0  # don't enforce min on preflop
+                min_pp = max(0.0, float(args.min_postflop_pct))
+                flop = max(flop, min_pp)
+                turn = max(turn, min_pp)
+                river = max(river, min_pp)
+                # Renormalize while keeping relative proportions
+                s = pre + flop + turn + river
+                if s > 0:
+                    pre, flop, turn, river = pre/s, flop/s, turn/s, river/s
+                street_dist = {'preflop': pre, 'flop': flop, 'turn': turn, 'river': river}
+            except Exception:
+                pass
         cfr = insights.get('recommended_cfr_iterations', {})
         payload = {
             'name': f'analytics_{ts}',
@@ -432,6 +634,31 @@ def main():
             'bet_sizing_recommendation': insights.get('bet_sizing_abstraction', []),
             'notes': 'Derived from analyzed official hand history data'
         }
+        # Export full dict too, for convenience
+        if street_dist:
+            payload['street_distribution'] = street_dist
+        # Include smoothing_alpha if provided
+        if args.smoothing_alpha is not None:
+            try:
+                payload['smoothing_alpha'] = float(args.smoothing_alpha)
+            except Exception:
+                pass
+        # Optional: experimental pot-relative bet sizing reconstruction placeholder
+        if args.pot_relative_bets:
+            try:
+                # Placeholder export structure; real reconstruction to be implemented
+                payload.setdefault('bet_sizing_override', {})
+                payload['bet_sizing_override'].update({
+                    # Streets by index for generator: 0=pre,1=flop,2=turn,3=river
+                    # Fill with sample ratios as placeholders to be replaced by proper reconstruction
+                    1: [0.33, 0.5, 0.75, 1.0],
+                    2: [0.5, 0.75, 1.0],
+                    3: [0.66, 1.0, 1.5]
+                })
+                payload.setdefault('notes', '')
+                payload['notes'] += ' | Includes experimental pot-relative bet sizing placeholders'
+            except Exception:
+                pass
         with open(export_path, 'w') as f:
             json.dump(payload, f, indent=2)
         print(f"Derived config exported to: {export_path}")

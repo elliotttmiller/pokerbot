@@ -411,6 +411,7 @@ def main():
             'cfr_iterations': int(results['best_params'].get('cfr_iterations', 2000)),
             'preflop_weight': float(results['best_params'].get('preflop_weight', 0.2)),
             'flop_weight': float(results['best_params'].get('flop_weight', 0.33)),
+            'smoothing_alpha': float(results['best_params'].get('smoothing_alpha', 0.15)),
             'notes': f"Auto-tuned with scripts/auto_tune.py on {ts}. Best score: {results.get('best_score')}"
         }
         with open(out_path, 'w') as f:
