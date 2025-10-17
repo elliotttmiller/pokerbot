@@ -116,16 +116,32 @@ def test_per_player_diagnostics():
     all_targets = np.concatenate([p1_targets, p2_targets], axis=1)
     
     # Calculate per-player correlations
-    half = num_buckets
-    
     p1_mask = (p1_preds != 0) & (p1_targets != 0)
-    p1_corr = np.corrcoef(p1_preds[p1_mask].flatten(), p1_targets[p1_mask].flatten())[0, 1]
-    
     p2_mask = (p2_preds != 0) & (p2_targets != 0)
-    p2_corr = np.corrcoef(p2_preds[p2_mask].flatten(), p2_targets[p2_mask].flatten())[0, 1]
     
-    print(f"  ✓ Player 1 correlation: {p1_corr:.4f}")
-    print(f"  ✓ Player 2 correlation: {p2_corr:.4f}")
+    # Check for sufficient data before correlation
+    assert p1_mask.any(), "Player 1 should have non-zero values"
+    assert p2_mask.any(), "Player 2 should have non-zero values"
+    
+    p1_vals = p1_preds[p1_mask].flatten()
+    p1_targs = p1_targets[p1_mask].flatten()
+    p2_vals = p2_preds[p2_mask].flatten()
+    p2_targs = p2_targets[p2_mask].flatten()
+    
+    # Only compute correlation if we have enough variance
+    if len(p1_vals) > 1 and np.std(p1_vals) > 1e-8 and np.std(p1_targs) > 1e-8:
+        p1_corr = np.corrcoef(p1_vals, p1_targs)[0, 1]
+        print(f"  ✓ Player 1 correlation: {p1_corr:.4f}")
+    else:
+        p1_corr = 0.0
+        print(f"  ⚠ Player 1 has insufficient variance")
+    
+    if len(p2_vals) > 1 and np.std(p2_vals) > 1e-8 and np.std(p2_targs) > 1e-8:
+        p2_corr = np.corrcoef(p2_vals, p2_targs)[0, 1]
+        print(f"  ✓ Player 2 correlation: {p2_corr:.4f}")
+    else:
+        p2_corr = 0.0
+        print(f"  ⚠ Player 2 has insufficient variance")
     
     # Detect asymmetry
     corr_diff = abs(p1_corr - p2_corr)
