@@ -144,7 +144,8 @@ def validate_model(model_path, data_path, num_buckets: int | None = None, batch_
     
     # Validate
     print("[3/4] Computing validation metrics...")
-    criterion = MaskedHuberLoss(delta=1.0)
+    # Use lower Huber delta for more sensitive error penalization
+    criterion = MaskedHuberLoss(delta=0.5)
     
     total_loss = 0.0
     total_mae = 0.0
@@ -159,40 +160,46 @@ def validate_model(model_path, data_path, num_buckets: int | None = None, batch_
     with torch.no_grad():
         for batch_idx in range(num_batches):
             inputs, targets, mask = data_stream.get_batch('valid', batch_idx)
-            
             # Forward pass
             outputs = net(inputs)
-            
             # Compute metrics
             loss = criterion(outputs, targets, mask)
             total_loss += loss.item()
-            
-            # Masked metrics
+            # Masked metrics (always apply mask before any metric)
             masked_outputs = outputs * mask
             masked_targets = targets * mask
-            
-            mae = torch.mean(torch.abs(masked_outputs - masked_targets))
-            mse = torch.mean((masked_outputs - masked_targets) ** 2)
-            
-            total_mae += mae.item()
-            total_mse += mse.item()
-            num_samples += mask.sum().item()
-            
-            # Store for visualization/analysis
+            # De-standardize for reporting, then re-apply mask so masked entries stay zero
             if scaling_mean is not None and scaling_std is not None:
-                # De-standardize for reporting, then re-apply mask so masked entries stay zero
                 mean = scaling_mean.view(1, -1)
                 std = scaling_std.view(1, -1)
                 outputs_ds = outputs * std + mean
                 targets_ds = targets * std + mean
                 masked_outputs = outputs_ds * mask
                 masked_targets = targets_ds * mask
+            mae = torch.mean(torch.abs(masked_outputs - masked_targets))
+            mse = torch.mean((masked_outputs - masked_targets) ** 2)
+            total_mae += mae.item()
+            total_mse += mse.item()
+            num_samples += mask.sum().item()
             all_predictions.append(masked_outputs.cpu().numpy())
             all_targets.append(masked_targets.cpu().numpy())
             if 'valid_street' in data_stream.data:
                 # Repeat street for each sample in this batch
                 batch_streets = data_stream.data['valid_street'][batch_idx*data_stream.train_batch_size : (batch_idx+1)*data_stream.train_batch_size]
                 all_streets.append(batch_streets.cpu().numpy())
+    # Player-half alignment check (diagnostic)
+    if all_predictions and all_targets:
+        P = np.concatenate(all_predictions)
+        T = np.concatenate(all_targets)
+        num_outputs = P.shape[1]
+        half = num_outputs // 2
+        # Correlation for each half
+        corr_p1 = np.corrcoef(P[:, :half].flatten(), T[:, :half].flatten())[0, 1]
+        corr_p2 = np.corrcoef(P[:, half:].flatten(), T[:, half:].flatten())[0, 1]
+        print(f"  [DIAG] Player 1 half correlation: {corr_p1:.4f}")
+        print(f"  [DIAG] Player 2 half correlation: {corr_p2:.4f}")
+        if corr_p1 < -0.1 or corr_p2 < -0.1:
+            print("  [WARN] Negative correlation detected in player halves: check alignment and mask application!")
     
     # Compute averages
     avg_loss = total_loss / num_batches

@@ -38,8 +38,8 @@ def main():
                        help='Number of training samples (default: 1000)')
     parser.add_argument('--validation-samples', type=int, default=None,
                        help='Number of validation samples (default: samples // 5)')
-    parser.add_argument('--cfr-iters', type=int, default=2000,
-                       help='CFR iterations per sample (default: 2000, paper recommends 2000+)')
+    parser.add_argument('--cfr-iters', type=int, default=2500,
+                       help='CFR iterations per sample (default: 2500, paper recommends 2000+)')
     parser.add_argument('--output', type=str, default='src/train_samples',
                        help='Output directory for training data')
     parser.add_argument('--bucket-weights', type=str, default='',
