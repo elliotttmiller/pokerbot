@@ -35,6 +35,7 @@ import numpy as np
 from deepstack.core.net_builder import NetBuilder
 from deepstack.core.data_stream import DataStream
 from deepstack.core.masked_huber_loss import MaskedHuberLoss
+from deepstack.core.temperature_scaling import TemperatureScaler, evaluate_calibration
 
 
 def validate_model(model_path, data_path, num_buckets: int | None = None, batch_size=32):
@@ -372,6 +373,80 @@ def validate_model(model_path, data_path, num_buckets: int | None = None, batch_
         except Exception as _e:
             print(f"  [WARN] Failed to export per-bucket correlations: {_e}")
 
+        # Temperature Scaling for Calibration
+        print()
+        print("  Temperature Scaling Analysis:")
+        try:
+            temp_scaler = TemperatureScaler()
+            # Use validation data for temperature scaling
+            temp_value = temp_scaler.fit(pred_nonzero, target_nonzero, lr=0.01, max_iter=50)
+            print(f"    Optimal Temperature: {temp_value:.4f}")
+            
+            # Apply temperature scaling
+            scaled_preds = temp_scaler.transform(pred_nonzero)
+            
+            # Re-compute calibration with scaled predictions
+            try:
+                x_scaled = scaled_preds.reshape(-1, 1) if isinstance(scaled_preds, np.ndarray) else scaled_preds.cpu().numpy().reshape(-1, 1)
+                X_scaled = np.concatenate([x_scaled, np.ones_like(x_scaled)], axis=1)
+                theta_scaled, *_ = np.linalg.lstsq(X_scaled, target_nonzero.reshape(-1, 1), rcond=None)
+                calib_slope_scaled = float(theta_scaled[0, 0])
+                calib_bias_scaled = float(theta_scaled[1, 0])
+                print(f"    Calibration after scaling: slope={calib_slope_scaled:.4f}, bias={calib_bias_scaled:.4f}")
+                
+                # Improvement metrics
+                slope_improvement = abs(1.0 - calib_slope_scaled) - abs(1.0 - calib_slope)
+                bias_improvement = abs(calib_bias_scaled) - abs(calib_bias)
+                if slope_improvement < 0:
+                    print(f"    ✓ Slope improved by {abs(slope_improvement):.4f}")
+                if bias_improvement < 0:
+                    print(f"    ✓ Bias improved by {abs(bias_improvement):.4f}")
+            except Exception as e:
+                print(f"    [WARN] Could not compute post-scaling calibration: {e}")
+            
+            # Save temperature scaler for deployment
+            try:
+                repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+                reports_dir = os.path.join(repo_root, 'models', 'reports')
+                temp_path = os.path.join(reports_dir, 'temperature_scaler.pt')
+                temp_scaler.save(temp_path)
+                print(f"    ✓ Saved temperature scaler to {temp_path}")
+            except Exception:
+                pass
+                
+        except Exception as e:
+            print(f"    [WARN] Temperature scaling failed: {e}")
+        
+        # Per-player diagnostics
+        print()
+        print("  Per-Player Diagnostics:")
+        half = num_outputs // 2
+        # Player 1 metrics
+        p1_preds = all_predictions[:, :half]
+        p1_targets = all_targets[:, :half]
+        p1_mask = (p1_preds != 0) & (p1_targets != 0)
+        if p1_mask.any():
+            p1_corr = float(np.corrcoef(p1_preds[p1_mask].flatten(), p1_targets[p1_mask].flatten())[0, 1])
+            p1_mae = float(np.mean(np.abs(p1_preds[p1_mask] - p1_targets[p1_mask])))
+            p1_sign_mismatch = float(np.mean(np.sign(p1_preds[p1_mask]) != np.sign(p1_targets[p1_mask])))
+            print(f"    Player 1: corr={p1_corr:.4f}, MAE={p1_mae:.4f}, sign_mismatch={p1_sign_mismatch:.4f}")
+        
+        # Player 2 metrics
+        p2_preds = all_predictions[:, half:]
+        p2_targets = all_targets[:, half:]
+        p2_mask = (p2_preds != 0) & (p2_targets != 0)
+        if p2_mask.any():
+            p2_corr = float(np.corrcoef(p2_preds[p2_mask].flatten(), p2_targets[p2_mask].flatten())[0, 1])
+            p2_mae = float(np.mean(np.abs(p2_preds[p2_mask] - p2_targets[p2_mask])))
+            p2_sign_mismatch = float(np.mean(np.sign(p2_preds[p2_mask]) != np.sign(p2_targets[p2_mask])))
+            print(f"    Player 2: corr={p2_corr:.4f}, MAE={p2_mae:.4f}, sign_mismatch={p2_sign_mismatch:.4f}")
+        
+        # Flag if asymmetric (suggests alignment issue)
+        if p1_mask.any() and p2_mask.any():
+            corr_diff = abs(p1_corr - p2_corr)
+            if corr_diff > 0.2:
+                print(f"    ⚠ Large correlation difference ({corr_diff:.4f}) - check player alignment!")
+        
         # Print actionable recommendations based on diagnostics
         print()
         print("Recommendations:")
@@ -396,8 +471,34 @@ def validate_model(model_path, data_path, num_buckets: int | None = None, batch_
             recs.append("Negative per-player correlations: double-check player-half alignment and mask application.")
         if not recs:
             recs.append("Continue training for more epochs with cosine decay and monitor analyzer trends; iterate bucket weighting from latest diagnostics.")
-        for r in recs:
-            print(f"  - {r}")
+        
+        # Enhanced recommendations with priority levels
+        print()
+        print("  CRITICAL (Fix Immediately):")
+        critical_recs = [r for r in recs if any(word in r.lower() for word in ['negative', 'very high', 'miscalibrated'])]
+        if critical_recs:
+            for r in critical_recs:
+                print(f"    🔴 {r}")
+        else:
+            print("    ✓ No critical issues detected")
+        
+        print()
+        print("  HIGH PRIORITY (Address Soon):")
+        high_recs = [r for r in recs if any(word in r.lower() for word in ['low correlation', 'low coverage', 'high sign'])]
+        if high_recs:
+            for r in high_recs:
+                print(f"    🟡 {r}")
+        else:
+            print("    ✓ No high priority issues")
+        
+        print()
+        print("  OPTIMIZATION (Iterative Improvement):")
+        other_recs = [r for r in recs if r not in critical_recs and r not in high_recs]
+        if other_recs:
+            for r in other_recs:
+                print(f"    🟢 {r}")
+        else:
+            print("    ✓ Model is performing well")
     
     print()
     print("="*70)

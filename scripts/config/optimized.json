@@ -1,0 +1,49 @@
+{
+  "num_buckets": 169,
+  "bucket_count": 169,
+  "bet_sizing": [1, 2],
+  "hidden_sizes": [500, 500, 500, 500, 500, 500, 500],
+  "activation": "prelu",
+  "data_path": "C:/Users/AMD/pokerbot/src/train_samples",
+  "batch_size": 1024,
+  "use_gpu": true,
+  "lr": 0.0003,
+  "min_lr": 1e-5,
+  "epochs": 200,
+  "effective_batch_size": 4096,
+  "weight_decay": 0.01,
+  "warmup_epochs": 10,
+  "huber_delta": 0.3,
+  "ema_decay": 0.999,
+  "early_stop_patience": 20,
+  "early_stop_min_delta": 1e-6,
+  "use_street_weighting": true,
+  "street_weights": [0.8, 1.0, 1.2, 1.4],
+  "use_torch_compile": true,
+  "deterministic": false,
+  "versions_dir": "models/versions",
+  "checkpoint_dir": "models/checkpoints",
+  "comments": {
+    "description": "Optimized configuration based on validation recommendations analysis",
+    "changes_from_training": [
+      "Increased epochs from 50 to 200 (recommendation: train longer)",
+      "Lowered huber_delta from 0.5 to 0.3 (recommendation: lower delta for tighter fit)",
+      "Increased warmup_epochs from 5 to 10 (better lr warmup for large batch)",
+      "Increased effective_batch_size from 2048 to 4096 (recommendation: bigger batch)",
+      "Added street_weighting with emphasis on turn/river (recommendations: postflop focus)"
+    ],
+    "hidden_sizes": "7 layers × 500 units per DeepStack paper Table S2",
+    "batch_size": "1024 per device with accumulation to 4096 effective for stable gradients",
+    "huber_delta": "Lowered to 0.3 to penalize large errors more (was 0.5)",
+    "lr_schedule": "10 epoch warmup + cosine decay to min_lr=1e-5",
+    "ema": "Exponential moving average with decay=0.999 for better generalization",
+    "street_weights": "Emphasize later streets [0.8, 1.0, 1.2, 1.4] as they are harder to learn",
+    "data_requirements": "Minimum 10K samples with CFR iterations >= 2000 for good results",
+    "expected_results": {
+      "correlation": ">0.85",
+      "relative_error": "<5%",
+      "calibration_slope": "0.9-1.1",
+      "sign_mismatch": "<10%"
+    }
+  }
+}
