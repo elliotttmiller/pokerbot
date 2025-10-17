@@ -38,12 +38,18 @@ def main():
                        help='Number of training samples (default: 1000)')
     parser.add_argument('--validation-samples', type=int, default=None,
                        help='Number of validation samples (default: samples // 5)')
-    parser.add_argument('--cfr-iters', type=int, default=2500,
-                       help='CFR iterations per sample (default: 2500, paper recommends 2000+)')
+    parser.add_argument('--cfr-iters', type=int, default=2000,
+                       help='CFR iterations per sample (default: 2000, championship: 2500+)')
     parser.add_argument('--output', type=str, default='src/train_samples',
                        help='Output directory for training data')
     parser.add_argument('--bucket-weights', type=str, default='',
                        help='Path to bucket_weights.json for adaptive sampling')
+    parser.add_argument('--championship-bet-sizing', action='store_true', default=True,
+                       help='Use per-street bet sizing abstractions (recommended, default: True)')
+    parser.add_argument('--simple-bet-sizing', dest='championship_bet_sizing', action='store_false',
+                       help='Use simple pot-sized bets only')
+    parser.add_argument('--adaptive-cfr', action='store_true', default=False,
+                       help='Use adaptive CFR iterations based on situation complexity (experimental)')
     
     args = parser.parse_args()
     
@@ -55,7 +61,26 @@ def main():
     print(f"Training samples: {args.samples}")
     print(f"Validation samples: {valid_samples}")
     print(f"CFR iterations: {args.cfr_iters}")
+    print(f"Championship bet sizing: {args.championship_bet_sizing}")
+    print(f"Adaptive CFR: {args.adaptive_cfr}")
     print(f"Output: {args.output}")
+    
+    # Warn if settings are suboptimal
+    if args.samples < 10000:
+        print()
+        print("⚠ WARNING: Low sample count detected")
+        print(f"  Current: {args.samples} samples")
+        print("  Recommended minimum: 10,000 samples")
+        print("  Championship-level: 100,000+ samples")
+        print("  This may result in poor model performance")
+    
+    if args.cfr_iters < 2000:
+        print()
+        print("⚠ WARNING: Low CFR iterations detected")
+        print(f"  Current: {args.cfr_iters} iterations")
+        print("  Recommended: 2000+ iterations")
+        print("  Championship-level: 2500+ iterations")
+    
     print("="*70)
     print()
     
@@ -82,7 +107,9 @@ def main():
         valid_count=valid_samples,
         output_path=args.output,
         cfr_iterations=args.cfr_iters,
-        bucket_sampling_weights=bucket_weights
+        bucket_sampling_weights=bucket_weights,
+        use_championship_bet_sizing=args.championship_bet_sizing,
+        use_adaptive_cfr=args.adaptive_cfr
     )
     
     print()

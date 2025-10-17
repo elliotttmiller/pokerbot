@@ -65,24 +65,46 @@ class ImprovedDataGenerator:
     Per DeepStack paper Section S3.1:
     "We generate training data by sampling random poker situations and solving
     each with CFR. The neural network is then trained to predict these solutions."
+    
+    Championship-level enhancements:
+    - Per-street bet sizing abstractions
+    - Adaptive CFR iterations based on game complexity
+    - Strategic range sampling
     """
+    
+    # Championship-level bet sizing per street (pot-relative)
+    # Based on research from g5-poker-bot and DeepStack hand histories
+    BET_SIZING_CHAMPIONSHIP = {
+        0: [0.5, 1.0, 2.0, 4.0],           # Preflop: wider range including 3-bets, 4-bets
+        1: [0.33, 0.5, 0.75, 1.0, 1.5],    # Flop: common c-bet sizes
+        2: [0.5, 0.75, 1.0, 1.5],          # Turn: focused sizes
+        3: [0.5, 0.75, 1.0, 2.0],          # River: polarized (value/bluff)
+    }
     
     def __init__(self,
                  num_hands: int = 169,
                  cfr_iterations: int = 1000,
                  verbose: bool = True,
-                 bucket_sampling_weights: Optional[np.ndarray] = None):
+                 bucket_sampling_weights: Optional[np.ndarray] = None,
+                 use_per_street_bet_sizing: bool = True,
+                 use_adaptive_cfr: bool = False):
         """
         Initialize data generator.
         
         Args:
             num_hands: Number of hand buckets (169 for Texas Hold'em)
-            cfr_iterations: CFR iterations per situation (paper uses 1000+)
+            cfr_iterations: CFR iterations per situation (paper uses 1000+, recommend 2000+)
             verbose: Print progress
+            bucket_sampling_weights: Optional weights for biased bucket sampling
+            use_per_street_bet_sizing: Use street-specific bet abstractions (championship-level)
+            use_adaptive_cfr: Adjust CFR iterations based on situation complexity
         """
         self.num_hands = num_hands
         self.cfr_iterations = cfr_iterations
         self.verbose = verbose
+        self.use_per_street_bet_sizing = use_per_street_bet_sizing
+        self.use_adaptive_cfr = use_adaptive_cfr
+        
         # Optional per-bucket sampling weights (length num_hands), non-negative. Used to bias range sampling.
         if bucket_sampling_weights is not None:
             w = np.asarray(bucket_sampling_weights, dtype=np.float64)
@@ -179,6 +201,37 @@ class ImprovedDataGenerator:
             r = np.random.dirichlet(np.ones(self.num_hands, dtype=np.float64) * 2.0)
             return r.astype(np.float32)
     
+    def _get_adaptive_cfr_iterations(self, street: int, pot_size: int) -> int:
+        """
+        Get adaptive CFR iterations based on situation complexity.
+        
+        Championship-level enhancement from g5-poker-bot insights:
+        - Later streets need more iterations (larger game trees)
+        - Bigger pots need more accuracy (more important situations)
+        
+        Args:
+            street: Current street (0=preflop, 1=flop, 2=turn, 3=river)
+            pot_size: Total pot size
+            
+        Returns:
+            Number of CFR iterations for this situation
+        """
+        # Base iterations per street (later streets = bigger trees)
+        base_iterations = {
+            0: int(self.cfr_iterations * 0.75),  # Preflop: 75% of base
+            1: int(self.cfr_iterations * 0.90),  # Flop: 90% of base
+            2: int(self.cfr_iterations * 1.00),  # Turn: 100% of base
+            3: int(self.cfr_iterations * 1.20),  # River: 120% of base
+        }
+        
+        base = base_iterations.get(street, self.cfr_iterations)
+        
+        # Adjust for pot size (bigger pots = more important)
+        # Normalize pot by stack size (1000 chips)
+        pot_multiplier = 1.0 + min(pot_size / 1000.0, 0.3)  # Up to 30% increase
+        
+        return max(1000, int(base * pot_multiplier))  # Minimum 1000 iterations
+    
     def solve_situation(self, situation: dict) -> Tuple[np.ndarray, np.ndarray]:
         """
         Solve a poker situation using CFR.
@@ -196,22 +249,36 @@ class ImprovedDataGenerator:
             return self._placeholder_solve(situation)
         
         # Build lookahead tree from situation
+        street = situation['pot_state']['street']
+        
+        # Championship-level: Use per-street bet sizing if enabled
+        if self.use_per_street_bet_sizing:
+            bet_sizing = self.BET_SIZING_CHAMPIONSHIP.get(street, [1.0])
+        else:
+            bet_sizing = [1.0]  # Simple pot-sized bets
+        
         tree_params = {
-            'street': situation['pot_state']['street'],
+            'street': street,
             'bets': situation['pot_state']['bets'],
             'current_player': situation['pot_state']['current_player'],
             'board': situation['board'],
             'limit_to_street': True,
-            'bet_sizing': [1.0]  # Pot-sized bets
+            'bet_sizing': bet_sizing
         }
         
         try:
             tree_root = self.tree_builder.build_tree(tree_params)
             
+            # Adaptive CFR iterations based on situation complexity
+            if self.use_adaptive_cfr:
+                cfr_iters = self._get_adaptive_cfr_iterations(street, sum(situation['pot_state']['bets']))
+            else:
+                cfr_iters = self.cfr_iterations
+            
             # Set up CFR solver with proper warmup (skip first 400 iterations for averaging)
             from deepstack.core.tree_cfr import TreeCFR
             # REUSE terminal equity instance (CRITICAL for performance - avoids recomputing equity matrices)
-            skip_iters = max(200, self.cfr_iterations // 5)  # Skip first 20% for strategy averaging
+            skip_iters = max(200, cfr_iters // 5)  # Skip first 20% for strategy averaging
             cfr_solver = TreeCFR(skip_iterations=skip_iters, use_linear_cfr=True, use_cfr_plus=True, terminal_equity=self.terminal_equity)
             
             # Prepare starting ranges
@@ -221,7 +288,7 @@ class ImprovedDataGenerator:
             ])
             
             # Solve with CFR
-            result = cfr_solver.run_cfr(tree_root, starting_ranges, self.cfr_iterations)
+            result = cfr_solver.run_cfr(tree_root, starting_ranges, cfr_iters)
             # Evaluate CFVs at root for both players using the current average strategy
             # Player 1 CFV vector at root
             player_cfvs = cfr_solver.evaluate_cfv(tree_root, starting_ranges, player=0)
@@ -356,17 +423,26 @@ def generate_training_data(train_count: int = 10000,
                           valid_count: int = 1000,
                           output_path: str = r'C:/Users/AMD/pokerbot/src/train_samples',
                           cfr_iterations: int = 2000,
-                          bucket_sampling_weights: Optional[np.ndarray] = None) -> None:
+                          bucket_sampling_weights: Optional[np.ndarray] = None,
+                          use_championship_bet_sizing: bool = True,
+                          use_adaptive_cfr: bool = False) -> None:
     """
     Main function to generate improved training data (Texas Hold'em only).
     
     Per DeepStack paper: Generate 10M+ training examples for Texas Hold'em. Each solved with 2000+ CFR iterations.
     
+    Championship-level enhancements:
+    - Per-street bet sizing abstractions (based on g5-poker-bot and DeepStack research)
+    - Adaptive CFR iterations (optional - adjust based on situation complexity)
+    
     Args:
         train_count: Number of training examples
         valid_count: Number of validation examples  
         output_path: Path to save data
-        cfr_iterations: CFR iterations per sample (paper recommends 2000+)
+        cfr_iterations: CFR iterations per sample (paper recommends 2000+, championship: 2500+)
+        bucket_sampling_weights: Optional weights for adaptive bucket sampling
+        use_championship_bet_sizing: Use per-street bet abstractions (recommended)
+        use_adaptive_cfr: Adjust CFR iterations based on complexity (experimental)
     """
     num_hands = 169
 
@@ -374,7 +450,9 @@ def generate_training_data(train_count: int = 10000,
         num_hands=num_hands,
         cfr_iterations=cfr_iterations,
         verbose=True,
-        bucket_sampling_weights=bucket_sampling_weights
+        bucket_sampling_weights=bucket_sampling_weights,
+        use_per_street_bet_sizing=use_championship_bet_sizing,
+        use_adaptive_cfr=use_adaptive_cfr
     )
     
     print("="*70)
@@ -384,6 +462,8 @@ def generate_training_data(train_count: int = 10000,
     print(f"CFR iterations per sample: {cfr_iterations}")
     print(f"Training samples: {train_count}")
     print(f"Validation samples: {valid_count}")
+    print(f"Championship bet sizing: {use_championship_bet_sizing}")
+    print(f"Adaptive CFR iterations: {use_adaptive_cfr}")
     print("="*70)
     print()
     
