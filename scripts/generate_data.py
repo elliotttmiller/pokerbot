@@ -191,6 +191,8 @@ Examples:
                        help='Skip confirmation prompt')
     parser.add_argument('--save-config', action='store_true',
                        help='Save configuration to output directory')
+    parser.add_argument('--use-latest-analytics', action='store_true',
+                       help='Load latest parameters from config/data_generation/parameters (handhistory analytics or auto-tune) and apply street weights and bet sizing overrides')
     
     args = parser.parse_args()
     
@@ -310,6 +312,51 @@ Examples:
     # Track time
     start_time = time.time()
     
+    # Optionally load latest analytics/optimized parameters
+    street_sampling_weights = None
+    bet_sizing_override = None
+    if args.use_latest_analytics:
+        try:
+            from glob import glob
+            params_dir = os.path.join(os.path.dirname(__file__), '..', 'config', 'data_generation', 'parameters')
+            params_dir = os.path.abspath(params_dir)
+            files = glob(os.path.join(params_dir, '*.json'))
+            if files:
+                latest = max(files, key=os.path.getmtime)
+                with open(latest, 'r') as f:
+                    cfg2 = json.load(f)
+                # Street weights
+                if all(k in cfg2 for k in ('preflop_weight','flop_weight','turn_weight','river_weight')):
+                    street_sampling_weights = [cfg2['preflop_weight'], cfg2['flop_weight'], cfg2['turn_weight'], cfg2['river_weight']]
+                elif 'street_sampling_weights' in cfg2:
+                    street_sampling_weights = cfg2['street_sampling_weights']
+                elif 'street_weights' in cfg2:
+                    street_sampling_weights = cfg2['street_weights']
+                elif 'street_probs' in cfg2:
+                    street_sampling_weights = cfg2['street_probs']
+                elif 'street_distribution' in cfg2:
+                    street_sampling_weights = cfg2['street_distribution']
+                # Bet sizing
+                if 'bet_sizing_override' in cfg2:
+                    bet_sizing_override = cfg2['bet_sizing_override']
+                elif 'bet_sizing' in cfg2:
+                    bet_sizing_override = cfg2['bet_sizing']
+                elif 'bet_sizing_recommendation' in cfg2:
+                    bet_sizing_override = cfg2['bet_sizing_recommendation']
+                # Pretty print summary
+                print("[INFO] Using latest analytics/optimized parameters:")
+                print(f"       source: {latest}")
+                if street_sampling_weights is not None:
+                    print(f"       street weights: {street_sampling_weights}")
+                if bet_sizing_override is not None:
+                    keys = list(bet_sizing_override.keys())
+                    print(f"       bet sizing override: streets {keys}")
+                print()
+            else:
+                print("[INFO] No analytics/optimized parameters found under config/data_generation/parameters")
+        except Exception as e:
+            print(f"[WARN] Failed to load latest analytics parameters: {e}")
+
     # Generate data
     try:
         generate_training_data(
@@ -319,7 +366,9 @@ Examples:
             cfr_iterations=config['cfr_iterations'],
             bucket_sampling_weights=bucket_weights,
             use_championship_bet_sizing=config.get('championship_bet_sizing', True),
-            use_adaptive_cfr=config.get('adaptive_cfr', False)
+            use_adaptive_cfr=config.get('adaptive_cfr', False),
+            street_sampling_weights=street_sampling_weights,
+            bet_sizing_override=bet_sizing_override
         )
     except KeyboardInterrupt:
         print()

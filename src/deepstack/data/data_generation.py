@@ -148,7 +148,14 @@ class ImprovedDataGenerator:
                 s = float(arr.sum())
                 if s <= 0:
                     return default
-                return (arr / s).astype(np.float64)
+                arr = (arr / s).astype(np.float64)
+                # Guardrails: avoid degenerate distributions (e.g., 100% preflop) by blending with default
+                # If postflop mass is too small (<5%) or any zero probability, blend 15% with default and renormalize
+                if arr[1:].sum() < 0.05 or np.any(arr <= 1e-9):
+                    alpha = 0.15
+                    arr = (1.0 - alpha) * arr + alpha * default
+                    arr = (arr / arr.sum()).astype(np.float64)
+                return arr
             except Exception:
                 return default
         self.street_probs = _normalize_street_weights(street_sampling_weights)
@@ -608,7 +615,9 @@ def generate_training_data(train_count: int = 10000,
                           cfr_iterations: int = 2000,
                           bucket_sampling_weights: Optional[np.ndarray] = None,
                           use_championship_bet_sizing: bool = True,
-                          use_adaptive_cfr: bool = False) -> None:
+                          use_adaptive_cfr: bool = False,
+                          street_sampling_weights: Optional[object] = None,
+                          bet_sizing_override: Optional[dict] = None) -> None:
     """
     Main function to generate improved training data (Texas Hold'em only).
     """
@@ -619,7 +628,9 @@ def generate_training_data(train_count: int = 10000,
         verbose=True,
         bucket_sampling_weights=bucket_sampling_weights,
         use_per_street_bet_sizing=use_championship_bet_sizing,
-        use_adaptive_cfr=use_adaptive_cfr
+        use_adaptive_cfr=use_adaptive_cfr,
+        street_sampling_weights=street_sampling_weights,
+        bet_sizing_override=bet_sizing_override
     )
     print("="*70)
     print("IMPROVED DATA GENERATION - DeepStack Paper Methodology")
