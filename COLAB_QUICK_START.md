@@ -13,10 +13,17 @@
 2. Hardware accelerator: **GPU** (select T4 or better)
 3. Click Save
 
-### Step 3: Run All Cells
-1. Runtime → Run all
-2. Or press `Ctrl+F9` (Windows/Linux) or `Cmd+F9` (Mac)
-3. Watch the progress in each cell
+### Step 3: Run Cells and Restart Runtime
+**Initial run:**
+1. Runtime → Run all (or press `Ctrl+F9`/`Cmd+F9`)
+2. Watch the progress through cells 1 and 2
+
+**After Cell 2 completes - Runtime Restart Required:**
+1. Runtime → Restart runtime
+2. Skip cells 1-2 and continue from Cell 3
+3. Run remaining cells (Cell 3 onwards)
+
+**Why restart?** Google Colab requires a runtime restart after installing certain packages (numpy/pandas) to avoid binary incompatibility issues. This ensures the new versions load correctly.
 
 ## 📊 What Each Cell Does
 
