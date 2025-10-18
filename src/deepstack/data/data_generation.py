@@ -550,22 +550,42 @@ class ImprovedDataGenerator:
             try:
                 from multiprocessing import Pool, cpu_count
                 from tqdm import tqdm as _tqdm
+                # Normalize bet_sizing_override keys to integers for worker
+                bet_override_normalized = None
+                if self.bet_sizing_override:
+                    bet_override_normalized = {}
+                    for k, v in self.bet_sizing_override.items():
+                        try:
+                            bet_override_normalized[int(k)] = v
+                        except:
+                            pass
+                
+                # Use reduced CFR iterations for validation sets
+                effective_cfr_iters = self.cfr_iterations
+                if dataset_type == 'valid' and self.cfr_iterations >= 2000:
+                    effective_cfr_iters = max(1000, int(self.cfr_iterations * 0.6))
+                    if self.verbose:
+                        print(f"  Using reduced CFR iterations for validation: {effective_cfr_iters}")
+                
                 config = {
                     'num_hands': self.num_hands,
-                    'cfr_iterations': self.cfr_iterations,
+                    'cfr_iterations': effective_cfr_iters,
                     'verbose': self.verbose,
                     'bucket_weights': None if self.bucket_weights is None else self.bucket_weights.astype(np.float64),
                     'use_per_street_bet_sizing': self.use_per_street_bet_sizing,
                     'use_adaptive_cfr': self.use_adaptive_cfr,
                     'street_probs': self.street_probs.tolist() if hasattr(self, 'street_probs') else [0.20, 0.35, 0.25, 0.20],
-                    'bet_sizing_override': self.bet_sizing_override,
+                    'bet_sizing_override': bet_override_normalized,
                 }
+                # Optimal chunksize: balance between overhead and progress visibility
+                # For expensive operations (2000 CFR iters), use larger chunks
+                optimal_chunksize = max(1, min(10, num_samples // (cpu_count() * 4)))
+                
                 with Pool(processes=max(1, cpu_count() - 1), initializer=_mp_init, initargs=(config,)) as pool:
                     results = list(_tqdm(pool.imap_unordered(
                         _mp_worker_entry,
                         range(num_samples),
-                        # Small chunksize so results stream quickly and progress is visible early
-                        chunksize=1
+                        chunksize=optimal_chunksize
                     ), total=num_samples, desc=f"Generating {dataset_type} samples", unit="sample"))
                 for i, (in_vec, tgt_vec, mask_vec, street) in enumerate(results):
                     inputs[i] = in_vec
@@ -648,6 +668,10 @@ def generate_training_data(train_count: int = 10000,
     print(f"Validation samples: {valid_count}")
     print(f"Championship bet sizing: {use_championship_bet_sizing}")
     print(f"Adaptive CFR iterations: {use_adaptive_cfr}")
+    if street_sampling_weights:
+        print(f"Street weights: {street_sampling_weights}")
+    if bet_sizing_override:
+        print(f"Bet sizing override streets: {list(bet_sizing_override.keys())}")
     print("="*70)
     print()
     valid_inputs, valid_targets, valid_masks, valid_streets = generator.generate_dataset(valid_count, output_path, 'valid')

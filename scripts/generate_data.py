@@ -55,6 +55,16 @@ PROFILES = {
         'adaptive_cfr': False,
         'description': 'Quick testing (5-10 minutes)',
     },
+    'quick_analytics': {
+        'samples': 2000,
+        'validation_samples': 400,
+        'cfr_iterations': 1200,
+        'output': 'src/train_samples_quick_analytics',
+        'championship_bet_sizing': True,
+        'adaptive_cfr': False,
+        'use_analytics': True,
+        'description': 'Fast analytics validation (10-15 minutes)',
+    },
     'development': {
         'samples': 10000,
         'validation_samples': 2000,
@@ -81,6 +91,16 @@ PROFILES = {
         'championship_bet_sizing': True,
         'adaptive_cfr': True,
         'description': 'Championship-level (4-5 days)',
+    },
+    'official_analytics': {
+        'samples': 100000,
+        'validation_samples': 20000,
+        'cfr_iterations': 2000,
+        'output': 'src/train_samples_analytics',
+        'championship_bet_sizing': True,
+        'adaptive_cfr': False,
+        'use_analytics': True,  # Forces --use-latest-analytics
+        'description': 'Official DeepStack hand history analytics (18-24 hours)',
     },
 }
 
@@ -140,10 +160,12 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Profiles:
-  testing      : 1K samples, 500 CFR iters (~5-10 min)
-  development  : 10K samples, 1500 CFR iters (~1-2 hours)
-  production   : 100K samples, 2500 CFR iters (~18-24 hours)
-  championship : 500K samples, 2500 CFR iters (~4-5 days)
+  testing           : 1K samples, 500 CFR iters (~5-10 min)
+  quick_analytics   : 2K samples, 1200 CFR iters, analytics-driven (~10-15 min)
+  development       : 10K samples, 1500 CFR iters (~1-2 hours)
+  production        : 100K samples, 2500 CFR iters (~18-24 hours)
+  championship      : 500K samples, 2500 CFR iters (~4-5 days)
+  official_analytics: 100K samples from DeepStack hand histories (~18-24 hours)
 
 Examples:
   # Quick test
@@ -154,6 +176,9 @@ Examples:
   
   # Championship with adaptive CFR
   python scripts/generate_data.py --profile championship --adaptive-cfr
+  
+  # Official analytics-driven generation
+  python scripts/generate_data.py --profile official_analytics --yes
   
   # Custom configuration from file
   python scripts/generate_data.py --config config/data_generation/my_config.json
@@ -227,6 +252,10 @@ Examples:
         config['championship_bet_sizing'] = False
     if args.adaptive_cfr is not None:
         config['adaptive_cfr'] = True
+    
+    # Auto-enable analytics for official_analytics profile
+    if args.profile == 'official_analytics' or config.get('use_analytics'):
+        args.use_latest_analytics = True
     
     # Ensure validation samples default
     if 'validation_samples' not in config or config['validation_samples'] is None:
