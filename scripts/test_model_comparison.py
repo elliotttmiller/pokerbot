@@ -1,6 +1,9 @@
 #!/usr/bin/env python3
 """
-Test script for model comparison functionality in train_champion.py
+Test script for model comparison functionality.
+
+Tests the model comparison and promotion logic used in train.py.
+Validates champion selection between current and previous best models.
 
 This script tests that:
 1. Models are properly saved with consistent names

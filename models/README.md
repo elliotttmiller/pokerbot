@@ -39,12 +39,29 @@ agent.load_strategy("models/champion_final")
 action, raise_amt = agent.choose_action(hole_cards, community_cards, pot, bet, stack, opp_bet)
 ```
 
-## Note
+## Training
 
-Model files are not committed to git (see `.gitignore`). You need to train your own models using:
+Model files are not committed to git (see `.gitignore`). Train your own models using:
 
+**For PokerBot/Agent Training:**
 ```bash
-python scripts/train_champion.py --mode smoketest
+# Quick test
+python scripts/train.py --agent-type pokerbot --mode smoketest --verbose
+
+# Development
+python scripts/train.py --agent-type pokerbot --mode standard --verbose
+
+# Production
+python scripts/train.py --agent-type pokerbot --mode production --verbose --report
+```
+
+**For DeepStack Network Training:**
+```bash
+# Development
+python scripts/train_deepstack.py --config scripts/config/development.json
+
+# Production with GPU
+python scripts/train_deepstack.py --config scripts/config/championship.json --use-gpu
 ```
 
 See `docs/TRAINING_GUIDE.md` for complete instructions.

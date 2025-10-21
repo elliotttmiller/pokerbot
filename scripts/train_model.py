@@ -2,8 +2,8 @@
 """
 Unified Model Training Script
 
-This script consolidates all training functionality with profile-based configurations.
-Replaces: train_deepstack.py, train_champion.py, and provides unified interface
+This script consolidates training functionality with profile-based configurations.
+Provides an alternative to train_deepstack.py with unified interface.
 
 Usage:
   # Using predefined profiles
