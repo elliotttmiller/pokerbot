@@ -70,7 +70,7 @@ python scripts/generate_data.py --profile championship --adaptive-cfr
 ```
 
 ### `scripts/train_model.py`
-**Replaces:** `train_deepstack.py`, `train_champion.py`
+**Alternative to:** `train_deepstack.py`
 
 Unified training with profile support:
 - **Profiles:** testing, development, production, championship
@@ -89,7 +89,7 @@ python scripts/train_model.py --config config/training/custom.json
 ```
 
 ### `scripts/validate_model.py`
-**Replaces:** `validate_deepstack_model.py`, `validate_data.py`
+**Alternative to:** `validate_deepstack_model.py`, `validate_data.py`
 
 Unified validation:
 - **Types:** data, model, all
@@ -338,14 +338,16 @@ The following scripts are now deprecated in favor of the unified system:
 - ~~`generate_production_data.py`~~ → `generate_data.py --profile production`
 
 ### Training
-- ~~`train_deepstack.py`~~ → `train_model.py --profile production`
-- ~~`train_champion.py`~~ → `train_model.py --profile championship`
+- `train_deepstack.py` → Still active (primary for DeepStack network)
+- `train.py` → Still active (primary for agent training)
+- Alternative: `train_model.py --profile <profile>` (unified approach)
 
 ### Validation
-- ~~`validate_deepstack_model.py`~~ → `validate_model.py --type model`
-- ~~`validate_data.py`~~ → `validate_model.py --type data`
+- `validate_deepstack_model.py` → Still active (primary)
+- `validate_data.py` → Still active (primary)
+- Alternative: `validate_model.py --type <type>` (unified approach)
 
-**Note:** Old scripts remain functional for backward compatibility but will be removed in future versions.
+**Note:** Legacy data generation scripts have been removed. Training and validation scripts are available in both primary and unified versions.
 
 ## Configuration Reference
 
