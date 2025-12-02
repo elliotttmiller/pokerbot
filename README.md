@@ -1,8 +1,267 @@
-# Poker Bot - Advanced AI Poker Agent
+# Poker Bot - Professional AI Poker System
 
-A comprehensive poker bot system with multiple AI agents, including advanced CFR with pruning, DQN, and unified champion agents. The system features **a fully optimized DeepStack training pipeline**, vision-based game state detection, distributed training, and real-time search capabilities.
+A professional-grade poker AI system implementing the **"Specialist" System Architecture** based on DeepStack and modern reinforcement learning practices. The system features decoupled perception, decision, and action components for championship-level poker play.
 
-## 📚 Documentation
+## 🏛️ Architecture: The "Specialist" System
+
+Our bot is architected as a synergistic system of specialized components:
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    MAIN LOOP (Orchestrator)                      │
+├─────────────────────────────────────────────────────────────────┤
+│  1. SENSE      │  2. PERCEIVE   │  3. DECIDE    │  4. ACT       │
+│  Screenshot    │  VLM Service   │  CFR Solver   │  Executor     │
+│  ─────────────►│  ─────────────►│  ─────────────►│  ─────────►  │
+│  (Pixels)      │  (GameState)   │  (Action)     │  (GUI Click)  │
+└─────────────────────────────────────────────────────────────────┘
+
+Components:
+┌─────────────────┐  ┌─────────────────┐  ┌─────────────────┐
+│   CROUPIER      │  │   STRATEGIST    │  │     HANDS       │
+│   (Perception)  │  │   (Decision)    │  │    (Action)     │
+├─────────────────┤  ├─────────────────┤  ├─────────────────┤
+│ • VLMService    │  │ • CFRSolver     │  │ • ActionExecutor│
+│ • QWEN 2.5-VL   │  │ • ValueNetwork  │  │ • PyAutoGUI     │
+│ • GameState     │  │ • DeepStack     │  │ • Screen Coords │
+└─────────────────┘  └─────────────────┘  └─────────────────┘
+```
+
+### Core Philosophy: Decoupled Excellence
+
+| Component | Role | Knowledge |
+|-----------|------|-----------|
+| **Croupier** (Perception) | Achieve flawless perception | Knows pixels, produces GameState |
+| **Strategist** (Decision) | Master of game theory | Knows GameState, produces Action |
+| **Hands** (Action) | Execute decisions | Knows Action, produces GUI clicks |
+
+## 🚀 Quick Start
+
+### Installation
+
+```bash
+# Clone repository
+git clone https://github.com/elliotttmiller/pokerbot.git
+cd pokerbot
+
+# Create virtual environment
+python3 -m venv venv
+source venv/bin/activate  # Windows: venv\Scripts\activate
+
+# Install dependencies
+pip install -r requirements.txt
+```
+
+### Run the Bot
+
+```bash
+# Simulation mode (no GUI interaction)
+python main.py --simulate --max-hands 10
+
+# With custom config
+python main.py --config config/config.yaml --verbose
+
+# Calibrate screen coordinates
+python main.py --calibrate
+```
+
+### Use as Library
+
+```python
+from poker_bot.core import GameState, Card, Action, ActionType
+from poker_bot.perception import VLMService
+from poker_bot.decision import CFRSolver
+from poker_bot.action import ActionExecutor
+
+# 1. Perception: Extract game state from screenshot
+perception = VLMService(model_path="models/perception_v1")
+game_state = perception.get_game_state(screenshot_image)
+
+# 2. Decision: Compute optimal action
+solver = CFRSolver(num_buckets=169, lookahead_depth=3)
+action = solver.solve(game_state, iterations=1000)
+
+# 3. Action: Execute on GUI
+executor = ActionExecutor(simulation_mode=False)
+executor.execute(action)
+```
+
+## 📁 Project Structure
+
+```
+poker-ai-system/
+│
+├── main.py                 # Single entry point - runs main loop
+├── README.md               # This file
+├── requirements.txt        # Dependencies
+│
+├── config/
+│   ├── config.yaml         # Central configuration
+│   └── logging_config.yaml # Logging configuration
+│
+├── models/
+│   ├── perception_v1/      # Fine-tuned VLM model
+│   └── decision_v1/        # Trained value network
+│
+├── data/
+│   └── poker-dataset-v1/   # VLM training data
+│
+├── src/
+│   └── poker_bot/
+│       ├── core/           # Core data models & environment
+│       │   ├── data_models.py   # GameState, Card, Action (Pydantic)
+│       │   └── poker_env.py     # PokerEnvironment simulator
+│       │
+│       ├── perception/     # Module 1: The "Croupier"
+│       │   └── vlm_service.py   # VLMService for game state extraction
+│       │
+│       ├── decision/       # Module 2: The "Strategist"
+│       │   ├── value_network.py # Neural network for value estimation
+│       │   └── cfr_solver.py    # CFR algorithm for decisions
+│       │
+│       ├── action/         # Module 3: The "Hands"
+│       │   └── executor.py      # ActionExecutor for GUI interaction
+│       │
+│       └── utils/          # Supporting utilities
+│           ├── screen_capture.py
+│           ├── config_loader.py
+│           └── logger.py
+│
+└── tests/
+    ├── core/
+    │   └── test_poker_env.py    # Tests for game logic
+    ├── decision/
+    │   └── test_cfr_solver.py   # Tests for CFR solver
+    └── test_specialist_integration.py  # Integration tests
+```
+
+## 🎯 Components Deep Dive
+
+### Module 1: Perception Engine (The "Croupier")
+
+**Purpose:** Convert unstructured visual data (pixels) into structured game information.
+
+```python
+from poker_bot.perception import VLMService
+
+# Initialize with fine-tuned QWEN 2.5-VL model
+service = VLMService(
+    model_path="models/perception_v1",
+    device="cuda",
+    use_quantization=True
+)
+
+# Extract game state from screenshot
+game_state = service.get_game_state(screenshot_image)
+
+print(f"Hole cards: {game_state.hole_cards}")
+print(f"Pot: {game_state.pot_size}")
+print(f"Street: {game_state.street}")
+```
+
+### Module 2: Decision Engine (The "Strategist")
+
+**Purpose:** Compute mathematically optimal actions using CFR and neural network value estimation.
+
+```python
+from poker_bot.decision import CFRSolver, ValueNetworkWrapper
+
+# Initialize solver with value network
+value_net = ValueNetworkWrapper(model_path="models/decision_v1/value_network.pt")
+solver = CFRSolver(
+    num_buckets=169,
+    value_network=value_net,
+    lookahead_depth=3,
+    use_cfr_plus=True
+)
+
+# Solve for optimal action
+action = solver.solve(game_state, iterations=1000)
+
+print(f"Action: {action.action_type}")
+print(f"Amount: {action.amount}")
+print(f"Confidence: {action.confidence}")
+```
+
+### Module 3: Action Executor (The "Hands")
+
+**Purpose:** Translate abstract decisions into physical GUI interactions.
+
+```python
+from poker_bot.action import ActionExecutor, ScreenCoordinates
+
+# Initialize with screen coordinates
+coords = ScreenCoordinates(
+    fold_button=(100, 500),
+    call_button=(200, 500),
+    raise_button=(300, 500),
+    bet_input=(250, 450)
+)
+
+executor = ActionExecutor(coordinates=coords, simulation_mode=False)
+
+# Execute action
+success = executor.execute(action)
+```
+
+## 📊 Data Models (Pydantic)
+
+All data flows through validated Pydantic models:
+
+```python
+from poker_bot.core import GameState, Card, Action, ActionType, BettingRound
+
+# Card with validation
+card = Card.from_string("As")  # Ace of spades
+print(card.rank, card.suit)    # 14, 3
+
+# GameState with full validation
+state = GameState(
+    hole_cards=[Card.from_string("As"), Card.from_string("Ks")],
+    community_cards=[],
+    pot_size=100,
+    current_bet=20,
+    street=BettingRound.PREFLOP,
+    confidence=0.95
+)
+
+# Action with type safety
+action = Action(
+    action_type=ActionType.RAISE,
+    amount=100,
+    confidence=0.85
+)
+```
+
+## 🧪 Testing
+
+```bash
+# Run all tests
+python -m pytest tests/ -v
+
+# Run specific test categories
+python -m pytest tests/core/ -v          # Core data models
+python -m pytest tests/decision/ -v      # CFR solver
+python -m pytest tests/test_specialist_integration.py -v  # Integration
+
+# Current test count: 63 tests passing
+```
+
+## 📚 References
+
+This implementation is based on:
+
+1. **DeepStack** - [Science Paper](https://www.deepstack.ai/)
+   - Continual re-solving with depth-limited search
+   - Neural network value estimation
+   
+2. **DeepStack-Leduc** - [GitHub](https://github.com/lifrordi/DeepStack-Leduc)
+   - Reference CFR implementation
+   
+3. **g5-poker-bot** - [GitHub](https://github.com/Nemandza82/g5-poker-bot)
+   - GPU acceleration patterns
+
+## 📚 Additional Documentation
 
 **NEW: Multi-Modal Vision Integration (QWEN 2.5-7B VL Support!)** 🎯
 - 🔮 **[MULTIMODAL_VISION_INTEGRATION_AUDIT.md](MULTIMODAL_VISION_INTEGRATION_AUDIT.md)** - Complete audit for QWEN VL integration ⭐ **NEW**

@@ -1,0 +1,56 @@
+# Logging Configuration
+# =======================
+# Configuration for the Python logging module.
+
+version: 1
+disable_existing_loggers: false
+
+formatters:
+  standard:
+    format: '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    datefmt: '%Y-%m-%d %H:%M:%S'
+  
+  detailed:
+    format: '%(asctime)s - %(name)s - %(levelname)s - %(filename)s:%(lineno)d - %(message)s'
+    datefmt: '%Y-%m-%d %H:%M:%S'
+
+handlers:
+  console:
+    class: logging.StreamHandler
+    level: INFO
+    formatter: standard
+    stream: ext://sys.stdout
+  
+  file:
+    class: logging.handlers.RotatingFileHandler
+    level: DEBUG
+    formatter: detailed
+    filename: logs/poker_bot.log
+    maxBytes: 10485760  # 10MB
+    backupCount: 5
+    encoding: utf8
+
+loggers:
+  poker_bot:
+    level: INFO
+    handlers: [console, file]
+    propagate: false
+  
+  perception:
+    level: INFO
+    handlers: [console, file]
+    propagate: false
+  
+  decision:
+    level: INFO
+    handlers: [console, file]
+    propagate: false
+  
+  action:
+    level: INFO
+    handlers: [console, file]
+    propagate: false
+
+root:
+  level: WARNING
+  handlers: [console]
