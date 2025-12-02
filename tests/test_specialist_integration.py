@@ -58,9 +58,8 @@ class TestPerceptionToDecision:
         solver = CFRSolver(num_buckets=10)
         action = solver.solve(game_state, iterations=10)
         
-        # Action should be one of the available actions
-        assert action.action_type in [ActionType.FOLD, ActionType.CALL, 
-                                       ActionType.RAISE, ActionType.CHECK]
+        # Action should be one of the available actions (CHECK not valid when current_bet > 0)
+        assert action.action_type in [ActionType.FOLD, ActionType.CALL, ActionType.RAISE]
 
 
 class TestDecisionToAction:

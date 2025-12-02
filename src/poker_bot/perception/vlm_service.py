@@ -464,13 +464,16 @@ Return ONLY the JSON object, nothing else."""
     
     def _get_mock_state(self) -> GameState:
         """Return mock state for testing."""
+        # Mock state represents preflop after blinds posted:
+        # SB=10, BB=20, so pot=30, current_bet=20
+        # Player hasn't acted yet, so current_bet=0 but needs to call 20
         return GameState(
             hole_cards=[Card.from_string('As'), Card.from_string('Ks')],
             community_cards=[],
-            pot_size=30,
-            current_bet=20,
-            player=PlayerState(stack=1000, current_bet=0),
-            opponent=PlayerState(stack=1000),
+            pot_size=30,  # SB(10) + BB(20)
+            current_bet=20,  # Amount to call (BB)
+            player=PlayerState(stack=980, current_bet=0),  # Posted SB, stack reduced
+            opponent=PlayerState(stack=980, current_bet=20),  # Posted BB
             street=BettingRound.PREFLOP,
             action_required=True,
             available_actions=[ActionType.FOLD, ActionType.CALL, ActionType.RAISE],
