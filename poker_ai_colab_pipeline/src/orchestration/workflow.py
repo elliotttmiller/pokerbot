@@ -132,8 +132,13 @@ class PokerWorkflowOrchestrator:
         game_state = self.detector.detect(screenshot_path)
         self.stats['perception_calls'] += 1
         
-        # Step 2: Decision
-        action = self.solver.solve(game_state.model_dump(), iterations=self.cfr_iterations)
+        # Step 2: Decision - Convert GameState to dict using Pydantic v2 or v1 compatibility
+        try:
+            game_state_dict = game_state.model_dump()
+        except AttributeError:
+            game_state_dict = game_state.dict()
+        
+        action = self.solver.solve(game_state_dict, iterations=self.cfr_iterations)
         self.stats['solver_calls'] += 1
         
         # Calculate latency
@@ -143,14 +148,19 @@ class PokerWorkflowOrchestrator:
         self.stats['total_decisions'] += 1
         self.stats['total_latency_ms'] += latency_ms
         
-        # Build result
+        # Build result - Get game state dict with Pydantic compatibility
+        try:
+            gs_dict = game_state.model_dump()
+        except AttributeError:
+            gs_dict = game_state.dict()
+        
         result = WorkflowResult(
             action=action.action_type.value,
             amount=action.amount,
             confidence=action.confidence,
             latency_ms=latency_ms,
             strategy=action.strategy,
-            game_state=game_state.model_dump(),
+            game_state=gs_dict,
             reasoning=self._build_reasoning(game_state, action)
         )
         

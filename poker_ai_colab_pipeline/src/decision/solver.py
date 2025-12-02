@@ -131,13 +131,11 @@ class DeepStackSolver:
         result = self.cfr.solve(tree, player_range, opponent_range, iterations)
         self.last_strategy = result['strategy']
         
-        # Extract best action
-        action = self._select_action(tree, game_state)
-        
         # Record timing
         self.last_solve_time = (time.time() - start_time) * 1000
-        action.solve_time_ms = self.last_solve_time
-        action.cfr_iterations = iterations
+        
+        # Extract best action with timing info
+        action = self._select_action(tree, game_state, iterations, self.last_solve_time)
         
         return action
     
@@ -165,7 +163,8 @@ class DeepStackSolver:
             'pot': pot
         }
     
-    def _select_action(self, tree: SearchNode, game_state: Dict) -> Action:
+    def _select_action(self, tree: SearchNode, game_state: Dict, 
+                       cfr_iterations: int = 0, solve_time_ms: float = 0.0) -> Action:
         """Select best action from solved tree."""
         action_probs = self.cfr.get_action_probabilities(tree)
         
@@ -178,21 +177,27 @@ class DeepStackSolver:
             return Action(
                 action_type=ActionType.FOLD,
                 confidence=best_prob,
-                strategy=action_probs
+                strategy=action_probs,
+                cfr_iterations=cfr_iterations,
+                solve_time_ms=solve_time_ms
             )
         
         if best_action == 'check':
             return Action(
                 action_type=ActionType.CHECK,
                 confidence=best_prob,
-                strategy=action_probs
+                strategy=action_probs,
+                cfr_iterations=cfr_iterations,
+                solve_time_ms=solve_time_ms
             )
         
         if best_action == 'call':
             return Action(
                 action_type=ActionType.CALL,
                 confidence=best_prob,
-                strategy=action_probs
+                strategy=action_probs,
+                cfr_iterations=cfr_iterations,
+                solve_time_ms=solve_time_ms
             )
         
         if best_action.startswith('raise_'):
@@ -204,14 +209,18 @@ class DeepStackSolver:
                 action_type=ActionType.RAISE,
                 amount=amount,
                 confidence=best_prob,
-                strategy=action_probs
+                strategy=action_probs,
+                cfr_iterations=cfr_iterations,
+                solve_time_ms=solve_time_ms
             )
         
         # Default to call
         return Action(
             action_type=ActionType.CALL,
             confidence=0.5,
-            strategy=action_probs
+            strategy=action_probs,
+            cfr_iterations=cfr_iterations,
+            solve_time_ms=solve_time_ms
         )
     
     def get_strategy(self) -> Optional[Dict[str, float]]:
