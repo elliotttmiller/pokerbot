@@ -1,0 +1,73 @@
+# Poker AI System Configuration
+# =============================
+# Central configuration for model paths, delays, and screen coordinates.
+
+# Model Paths
+models:
+  # Path to fine-tuned VLM model for perception
+  perception: models/perception_v1
+  # Path to trained value network for decision making
+  decision: models/decision_v1/value_network.pt
+
+# Perception Engine (Croupier) Settings
+perception:
+  # Device: 'auto', 'cuda', or 'cpu'
+  device: auto
+  # Use 4-bit quantization for memory efficiency
+  use_quantization: true
+  # Fall back to OpenAI API if local model unavailable
+  api_fallback: true
+
+# Decision Engine (Strategist) Settings
+decision:
+  # Number of CFR iterations per decision
+  cfr_iterations: 1000
+  # Lookahead depth for search tree
+  lookahead_depth: 3
+  # Use CFR+ (regret matching+) for faster convergence
+  use_cfr_plus: true
+  # Number of hand buckets (169 for preflop, varies by street)
+  num_buckets: 169
+  # Time limit for decisions in milliseconds (optional)
+  time_limit_ms: null
+
+# Action Executor (Hands) Settings
+action:
+  # Simulation mode: true = log actions without executing
+  simulation_mode: true
+  # Delay between major actions (seconds)
+  action_delay: 0.5
+  # Delay between keystrokes (seconds)
+  typing_delay: 0.05
+  # Delay after clicks (seconds)
+  click_delay: 0.1
+
+# Screen Coordinates (calibrate for your poker client)
+screen_coordinates:
+  fold: [0, 0]
+  check: [0, 0]
+  call: [0, 0]
+  raise: [0, 0]
+  bet_input: [0, 0]
+  all_in: [0, 0]
+  confirm: [0, 0]
+
+# Main Loop Settings
+main_loop:
+  # Delay between loop iterations (seconds)
+  loop_delay: 0.5
+  # Screenshot capture interval (seconds)
+  screenshot_interval: 0.1
+  # Maximum hands to play (null for unlimited)
+  max_hands: 100
+
+# Logging Settings
+logging:
+  # Log level: DEBUG, INFO, WARNING, ERROR, CRITICAL
+  level: INFO
+  # Directory for log files
+  log_dir: logs
+  # Log all decisions
+  log_decisions: true
+  # Save screenshots (useful for debugging)
+  log_screenshots: false

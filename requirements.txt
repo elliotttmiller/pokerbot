@@ -2,6 +2,7 @@
 # Note: Versions pinned for Google Colab compatibility
 numpy>=1.26.4,<2.0.0  # Colab-compatible range, avoids binary incompatibility
 pillow
+pydantic>=2.0.0  # Runtime data validation for game state models
 
 # Machine Learning
 tensorflow
@@ -15,6 +16,10 @@ tensorflow-model-optimization
 openai
 easyocr
 
+# VLM Support (optional, for QWEN 2.5-VL)
+transformers
+accelerate
+
 # Screen automation
 pyautogui
 pygetwindow
@@ -22,6 +27,9 @@ pymsgbox
 pyperclip
 pyscreeze
 pytweening
+
+# Configuration
+pyyaml
 
 # Utilities
 python-dotenv
