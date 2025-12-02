@@ -365,8 +365,17 @@ class PokerWorkflowOrchestrator:
         
         # Simplified equity estimation based on hand strength
         try:
-            high_rank = max(c.rank for c in hole_cards)
-            low_rank = min(c.rank for c in hole_cards)
+            # Convert rank to numeric value
+            def rank_to_value(rank) -> int:
+                if hasattr(rank, 'value'):
+                    return rank.value
+                rank_str = str(rank).upper()
+                rank_map = {'2': 2, '3': 3, '4': 4, '5': 5, '6': 6, '7': 7, '8': 8, 
+                           '9': 9, 'T': 10, '10': 10, 'J': 11, 'Q': 12, 'K': 13, 'A': 14}
+                return rank_map.get(rank_str, 7)  # Default to 7 if unknown
+            
+            high_rank = max(rank_to_value(c.rank) for c in hole_cards)
+            low_rank = min(rank_to_value(c.rank) for c in hole_cards)
             
             # Pair bonus
             is_pair = hole_cards[0].rank == hole_cards[1].rank
@@ -374,8 +383,8 @@ class PokerWorkflowOrchestrator:
             # Suited bonus
             is_suited = hole_cards[0].suit == hole_cards[1].suit
             
-            # Base equity from high card
-            base_equity = 0.3 + (high_rank / 12.0) * 0.3
+            # Base equity from high card (normalized 0-1)
+            base_equity = 0.3 + ((high_rank - 2) / 12.0) * 0.3
             
             if is_pair:
                 base_equity += 0.2

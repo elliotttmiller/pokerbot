@@ -418,14 +418,23 @@ Return ONLY the JSON object, nothing else."""
                 lines = response.split('\n')
                 response = '\n'.join(lines[1:-1] if lines[-1] == "```" else lines[1:])
             
-            # Find JSON object in response
-            json_match = re.search(r'\{[^{}]*\}', response, re.DOTALL)
-            if json_match:
-                data = json.loads(json_match.group())
+            # Try to find and parse JSON object in response
+            # First, try to parse the entire response as JSON
+            try:
+                data = json.loads(response)
                 state = DetectedGameState.from_dict(data)
                 state.raw_response = response
-                
-                # Validate detected state
+                state = self._validate_state(state)
+                return state
+            except json.JSONDecodeError:
+                pass
+            
+            # If that fails, try to find JSON object using bracket matching
+            json_str = self._extract_json_object(response)
+            if json_str:
+                data = json.loads(json_str)
+                state = DetectedGameState.from_dict(data)
+                state.raw_response = response
                 state = self._validate_state(state)
                 return state
             
@@ -438,6 +447,42 @@ Return ONLY the JSON object, nothing else."""
         except Exception as e:
             print(f"[MultiModalVision] Parse error: {e}")
             return self._get_mock_state()
+    
+    def _extract_json_object(self, text: str) -> Optional[str]:
+        """Extract a JSON object from text using bracket matching."""
+        start_idx = text.find('{')
+        if start_idx == -1:
+            return None
+        
+        # Count brackets to find matching closing brace
+        depth = 0
+        in_string = False
+        escape_next = False
+        
+        for i, char in enumerate(text[start_idx:], start=start_idx):
+            if escape_next:
+                escape_next = False
+                continue
+            
+            if char == '\\':
+                escape_next = True
+                continue
+            
+            if char == '"' and not escape_next:
+                in_string = not in_string
+                continue
+            
+            if in_string:
+                continue
+            
+            if char == '{':
+                depth += 1
+            elif char == '}':
+                depth -= 1
+                if depth == 0:
+                    return text[start_idx:i+1]
+        
+        return None
     
     def _validate_state(self, state: DetectedGameState) -> DetectedGameState:
         """Validate and clean detected game state."""
