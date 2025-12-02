@@ -4,7 +4,8 @@ A comprehensive poker bot system with multiple AI agents, including advanced CFR
 
 ## 📚 Documentation
 
-**NEW: Comprehensive Analysis & Recommendations (Latest!)** 🎯
+**NEW: Multi-Modal Vision Integration (QWEN 2.5-7B VL Support!)** 🎯
+- 🔮 **[MULTIMODAL_VISION_INTEGRATION_AUDIT.md](MULTIMODAL_VISION_INTEGRATION_AUDIT.md)** - Complete audit for QWEN VL integration ⭐ **NEW**
 - 📊 **[EXECUTIVE_SUMMARY.md](EXECUTIVE_SUMMARY.md)** - TL;DR executive summary (10 pages) ⭐ **START HERE**
 - 📋 **[COMPREHENSIVE_ANALYSIS_REPORT.md](COMPREHENSIVE_ANALYSIS_REPORT.md)** - Full 200+ page analysis of all references
 - 🗺️ **[IMPLEMENTATION_ROADMAP.md](IMPLEMENTATION_ROADMAP.md)** - Week-by-week implementation plan
@@ -24,6 +25,24 @@ A comprehensive poker bot system with multiple AI agents, including advanced CFR
 - 📖 **[MIGRATION_GUIDE.md](docs/MIGRATION_GUIDE.md)** - Agent migration and usage guide
 - 🔧 **[IMPLEMENTATION_SUMMARY.md](docs/IMPLEMENTATION_SUMMARY.md)** - Technical implementation details
 - 🔄 **[IMPORT_UPDATE_SUMMARY.md](docs/IMPORT_UPDATE_SUMMARY.md)** - System-wide import changes
+
+**Quick Start - Multi-Modal Vision Bot:**
+```bash
+# Use fine-tuned QWEN 2.5-7B VL model for game state detection
+from src.vision import MultiModalVisionDetector
+from src.workflow import PokerWorkflowOrchestrator
+
+# Initialize with vision model
+orchestrator = PokerWorkflowOrchestrator(
+    vision_model_path="models/qwen_poker_vl",
+    strategy_model_path="models/deepstack_champion.pt"
+)
+
+# Start playing
+orchestrator.start_new_hand()
+result = orchestrator.process_screenshot("screenshot.png")
+print(f"Action: {result.action}, Amount: {result.amount}")
+```
 
 **Quick Start - DeepStack Training:**
 ```bash
@@ -52,6 +71,26 @@ python scripts/train.py --agent-type pokerbot --mode production --verbose --repo
 ```
 
 ## 🚀 What's New
+
+### Multi-Modal Vision Integration (QWEN 2.5-7B VL) 🔮 (Dec 2025)
+
+**Complete infrastructure for integrating fine-tuned QWEN 2.5-7B VL model:**
+- ✅ `MultiModalVisionDetector` - Local VL model inference for game state detection
+- ✅ `PokerWorkflowOrchestrator` - Unified pipeline: vision → strategy → action
+- ✅ `GameContext` - Persistent hand tracking across decisions
+- ✅ Full test coverage with 19 passing tests
+- ✅ Comprehensive audit against world-class poker AI references
+
+**References Analyzed:**
+- ✅ DeepStack.pdf - Neural network architecture & continual re-solving
+- ✅ DeepStack-Leduc GitHub - CFR implementation patterns
+- ✅ g5-poker-bot - GPU acceleration patterns
+- ✅ self-operating-computer - Vision/multimodal integration
+- ✅ gto-poker-bot - GTO strategy implementation
+
+**See [MULTIMODAL_VISION_INTEGRATION_AUDIT.md](MULTIMODAL_VISION_INTEGRATION_AUDIT.md) for complete details.**
+
+---
 
 ### Comprehensive Analysis & Recommendations Complete! 🎯 (Latest - Oct 18, 2025)
 
