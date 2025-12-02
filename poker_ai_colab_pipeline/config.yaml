@@ -1,0 +1,163 @@
+# Poker AI Championship Pipeline - Central Configuration
+# =====================================================
+# This file contains all configuration for Google Colab deployment
+# Edit ONLY the paths and model names to match your Drive setup
+
+# ===================
+# GOOGLE DRIVE PATHS
+# ===================
+drive:
+  # Base path for all poker AI assets on Google Drive
+  base_path: /content/drive/MyDrive/poker_ai
+  
+  # Model checkpoints
+  models:
+    perception: /content/drive/MyDrive/poker_ai/models/qwen_poker_vl
+    decision: /content/drive/MyDrive/poker_ai/models/deepstack_champion.pt
+    onnx_export: /content/drive/MyDrive/poker_ai/models/deepstack_champion.onnx
+  
+  # Training data
+  data:
+    coco_annotations: /content/drive/MyDrive/poker_ai/data/annotations.coco.json
+    coco_images: /content/drive/MyDrive/poker_ai/data/images
+    cfr_samples: /content/drive/MyDrive/poker_ai/data/cfr_samples.npz
+  
+  # Checkpoints during training
+  checkpoints:
+    perception: /content/drive/MyDrive/poker_ai/checkpoints/perception
+    decision: /content/drive/MyDrive/poker_ai/checkpoints/decision
+
+# ===================
+# MODEL CONFIGURATION
+# ===================
+perception:
+  # QWEN 2.5-7B VL model settings
+  model_name: Qwen/Qwen2.5-VL-7B-Instruct
+  
+  # 4-bit quantization for Colab T4 (16GB VRAM)
+  quantization:
+    enabled: true
+    bits: 4
+    compute_dtype: float16
+  
+  # Unsloth LoRA fine-tuning
+  lora:
+    r: 16
+    lora_alpha: 32
+    lora_dropout: 0.05
+    target_modules:
+      - q_proj
+      - k_proj
+      - v_proj
+      - o_proj
+      - gate_proj
+      - up_proj
+      - down_proj
+  
+  # Training hyperparameters
+  training:
+    batch_size: 1
+    gradient_accumulation_steps: 8
+    learning_rate: 2.0e-5
+    num_epochs: 3
+    warmup_ratio: 0.1
+    max_grad_norm: 1.0
+    fp16: true
+    gradient_checkpointing: true
+    checkpoint_every_n_steps: 100
+
+decision:
+  # DeepStack value network settings
+  architecture:
+    input_size: 36  # Number of hand buckets
+    hidden_layers: [256, 128, 64]
+    output_size: 36  # Counterfactual values for all hands
+    activation: relu
+    dropout: 0.1
+  
+  # CFR solver settings (matches DeepStack paper)
+  cfr:
+    iterations: 2000
+    lookahead_depth: 3
+    use_cfr_plus: true
+    linear_discounting: true
+    pruning_threshold: -500000000  # Matches DeepStack-Leduc
+    skip_iterations: 200  # Don't update strategy for first N iterations
+  
+  # Training hyperparameters
+  training:
+    batch_size: 256
+    learning_rate: 1.0e-3
+    num_epochs: 100
+    weight_decay: 1.0e-5
+    early_stopping_patience: 10
+    temperature_scaling: true
+    target_ece: 0.05  # Expected Calibration Error target
+
+# ===================
+# COLAB OPTIMIZATION
+# ===================
+colab:
+  # Memory management for T4 GPU (16GB)
+  memory:
+    max_batch_size: 1
+    gradient_checkpointing: true
+    empty_cache_frequency: 10  # Clear CUDA cache every N steps
+    fp16_inference: true
+  
+  # Streaming data loading
+  data_loading:
+    streaming: true
+    prefetch_factor: 2
+    num_workers: 2
+    pin_memory: true
+
+# ===================
+# INFERENCE SETTINGS
+# ===================
+inference:
+  # Perception
+  perception:
+    temperature: 0.0  # Greedy decoding for deterministic output
+    max_new_tokens: 512
+    confidence_threshold: 0.7  # Minimum confidence for valid detection
+  
+  # Decision
+  decision:
+    cfr_iterations: 2000
+    time_limit_ms: 5000  # 5 second max per decision
+    default_action: call  # Fallback if solver fails
+
+# ===================
+# VALIDATION SETTINGS
+# ===================
+validation:
+  # DeepStack fidelity test
+  fidelity:
+    leduc_reference_path: data/leduc_reference_strategies.npz
+    max_strategy_diff: 0.05  # Maximum allowed difference from reference
+  
+  # Value network calibration
+  calibration:
+    ece_threshold: 0.05  # Expected Calibration Error
+    temperature_search_range: [0.5, 2.0]
+  
+  # Perception accuracy
+  perception:
+    min_accuracy: 0.98  # Minimum accuracy on validation set
+    test_images: 100  # Number of images for validation
+  
+  # Memory stability
+  memory:
+    test_cycles: 100  # Number of inference cycles for stability test
+    max_vram_increase_mb: 100  # Maximum allowed VRAM increase
+
+# ===================
+# LOGGING & MONITORING
+# ===================
+logging:
+  level: INFO
+  log_dir: logs
+  tensorboard: true
+  save_every_n_steps: 50
+  log_predictions: true
